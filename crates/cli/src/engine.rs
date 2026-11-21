@@ -10,7 +10,7 @@ use core::{
     diagnostics::{codes, Diagnostic, Severity},
     error::{Result, WcError},
     format::{self, ImageFormat},
-    model::{Decoded, StillImage},
+    model::{AnimatedImage, Decoded, StillImage},
     policy::{EncodeOptions, MetadataMode, OrientMode},
     protocol::{InputInfoPayload, OutputInfoPayload, Report},
     rgba,
@@ -192,20 +192,20 @@ fn run_convert(cli: &Cli) -> Result<i32> {
 
     let mut diags: Vec<Diagnostic> = Vec::new();
 
-    // ---- decode ----
-    let mut still = decode_still(codec, &input.bytes, cli)?;
+    // ---- decode (still, page, frame, or animation) ----
+    let decoded = decode_input(codec, &input.bytes, cli, &info)?;
     deadline.check("decode")?;
 
-    // ---- limits ----
+    // ---- limits (canvas: one frame of an animation) -------
+    let canvas = match &decoded {
+        Decoded::Still(s) => (s.pixel_count(), s.width, s.height),
+        Decoded::Animated(a) => (u64::from(a.width) * u64::from(a.height), a.width, a.height),
+    };
     let max_pixels = u64::from(cli.max_pixels_mp) * 1_000_000;
-    if still.pixel_count() > max_pixels {
+    if canvas.0 > max_pixels {
         return Err(WcError::ResourceLimit(format!(
-            "image is {}x{} ({} pixels); exceeds --max-pixels-mp {} ({} pixels)",
-            still.width,
-            still.height,
-            still.pixel_count(),
-            cli.max_pixels_mp,
-            max_pixels
+            "image canvas is {}x{} ({} pixels); exceeds --max-pixels-mp {} ({} pixels)",
+            canvas.1, canvas.2, canvas.0, cli.max_pixels_mp, max_pixels
         )));
     }
 
@@ -213,16 +213,100 @@ fn run_convert(cli: &Cli) -> Result<i32> {
     let target = choose_target_format(codec, cli, &inv.output, &mut diags)?;
     let mut opts = encode_options(cli, target);
 
+    // ---- route: still vs animated ----
+    // Animated input accepts three explicit exits: --frame (a still frame),
+    // --flatten (first frame as a still, warned), or an animation-capable
+    // target. Enforced above in decode_input / below here (no silent drops).
+    enum Route {
+        Still(StillImage),
+        Animated(AnimatedImage),
+    }
+    let mut route = match decoded {
+        Decoded::Still(s) => Route::Still(s),
+        Decoded::Animated(a) => {
+            if cli.flatten {
+                let n = a.frames.len();
+                let first = a
+                    .frames
+                    .into_iter()
+                    .next()
+                    .expect("frames.len() > 0 for animated");
+                diags.push(Diagnostic::warning(
+                    codes::ANIMATION_FLATTENED,
+                    format!("flattened {n}-frame animation to its first frame (--flatten)"),
+                ));
+                Route::Still(first.still)
+            } else {
+                let target_codecs_animate = registry::all_codecs()
+                    .iter()
+                    .find(|c| c.format() == target)
+                    .map(|c| c.caps().animation_write)
+                    .unwrap_or(false);
+                if !target_codecs_animate {
+                    return Err(WcError::UnsupportedInput(format!(
+                        "input contains {} animation frames and {} cannot store \
+                         animations; use --frame N, --flatten, or write to webp/gif \
+                         (no silent dropping of frames)",
+                        a.frames.len(),
+                        target.as_str()
+                    )));
+                }
+                // alpha policy for the animated route: GIF quantizes partial
+                // alpha to 1-bit; PNG-style full alpha only reaches webp
+                if a.frames.iter().any(|f| f.still.has_alpha)
+                    && a.frames.iter().any(|f| {
+                        f.still
+                            .rgba
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .any(|p| p[3] != 0 && p[3] != 255)
+                    })
+                    && !target.supports_alpha()
+                {
+                    // unreachable today (animated targets are gif/webp, both
+                    // alpha-capable); kept so the rule survives codec growth
+                    return Err(WcError::MissingOption(format!(
+                        "target {} cannot store alpha; --background #RRGGBB is required",
+                        target.as_str()
+                    )));
+                }
+                if target == ImageFormat::Gif
+                    && a.frames.iter().any(|f| {
+                        f.still
+                            .rgba
+                            .as_chunks::<4>()
+                            .0
+                            .iter()
+                            .any(|p| p[3] > 0 && p[3] < 255)
+                    })
+                {
+                    diags.push(Diagnostic::warning(
+                        codes::ALPHA_REDUCED,
+                        "partial alpha values are reduced to 1-bit transparency by GIF",
+                    ));
+                }
+                Route::Animated(a)
+            }
+        }
+    };
+
     // ---- policy (never loses data silently) ----
-    apply_policy(
-        &mut still,
-        &mut opts,
-        target,
-        codec.format(),
-        cli,
-        &input.bytes,
-        &mut diags,
-    )?;
+    let still_for_policy = match &mut route {
+        Route::Still(still) => Some(still),
+        Route::Animated(_) => None, // per-frame loss rules applied above
+    };
+    if let Some(still) = still_for_policy {
+        apply_policy(
+            still,
+            &mut opts,
+            target,
+            codec.format(),
+            cli,
+            &input.bytes,
+            &mut diags,
+        )?;
+    }
 
     if cli.dry_run {
         let mut report = Report::success("convert");
@@ -254,9 +338,17 @@ fn run_convert(cli: &Cli) -> Result<i32> {
             target.as_str()
         )));
     }
-    let bytes = target_codec.encode_still(&still, &opts).map_err(|e| {
-        WcError::Internal(format!("could not encode {} output: {e}", target.as_str()))
-    })?;
+    let bytes = match route {
+        Route::Still(still) => target_codec.encode_still(&still, &opts).map_err(|e| {
+            WcError::Internal(format!("could not encode {} output: {e}", target.as_str()))
+        })?,
+        Route::Animated(anim) => target_codec.encode_animated(&anim, &opts).map_err(|e| {
+            WcError::Internal(format!(
+                "could not encode {} animation: {e}",
+                target.as_str()
+            ))
+        })?,
+    };
     deadline.check("encode")?;
 
     // ---- output routing ----
@@ -347,23 +439,40 @@ fn choose_input_codec(
     ))
 }
 
-/// Route decode: --frame selection, single-frame stills, and the
-/// never-silently-drop animation rule.
-fn decode_still(codec: &dyn Codec, payload: &[u8], cli: &Cli) -> Result<StillImage> {
+/// Route decode: --page selection for multi-page containers, --frame
+/// selection, single-frame stills, and the never-silently-drop animation
+/// rule (animated-output routing lives in run_convert).
+fn decode_input(
+    codec: &dyn Codec,
+    payload: &[u8],
+    cli: &Cli,
+    _info: &core::model::ImageInfo,
+) -> Result<Decoded> {
+    if let Some(page) = cli.page {
+        // frame and page selection are mutually exclusive concerns; clap
+        // allows both, the engine rejects the ambiguous combination
+        if cli.frame.is_some() {
+            return Err(WcError::InvalidArguments(
+                "--page and --frame cannot be combined (pages pick container pages, \
+                 frames pick animation frames)"
+                    .into(),
+            ));
+        }
+        return codec.decode_page(payload, page).map(Decoded::Still);
+    }
     if let Some(index) = cli.frame {
-        return codec.decode_frame(payload, index);
+        return codec.decode_frame(payload, index).map(Decoded::Still);
     }
 
     match codec.decode(payload)? {
-        Decoded::Still(s) => Ok(s),
-        Decoded::Animated(a) if a.frames.len() <= 1 => {
-            Ok(a.frames.into_iter().next().expect(">= 1 frame").still)
-        }
-        Decoded::Animated(a) => Err(WcError::UnsupportedInput(format!(
-            "input contains {} animation frames; --frame N is required to pick one \
-             (no silent dropping of frames)",
-            a.frames.len()
-        ))),
+        Decoded::Still(s) => Ok(Decoded::Still(s)),
+        Decoded::Animated(a) if a.frames.len() <= 1 => Ok(Decoded::Still(
+            a.frames.into_iter().next().expect(">= 1 frame").still,
+        )),
+        // multi-frame animations are always handed through: run_convert owns
+        // the routing decision (--flatten → first frame, --frame handled
+        // above, animation-capable target, or a loud refusal — never silent)
+        Decoded::Animated(a) => Ok(Decoded::Animated(a)),
     }
 }
 
@@ -482,6 +591,17 @@ fn apply_policy(
     }
 
     // -- orientation -------------------------------------------------------
+    // 16-bit TIFF input is normalized to 8-bit by the decoder — say so
+    // (plan §5.4: bit-depth reduction is a loss and must not be silent).
+    if input_format == ImageFormat::Tiff
+        && core::metadata::tiff_max_bits_per_sample(payload).is_some_and(|b| b > 8)
+    {
+        diags.push(Diagnostic::info(
+            codes::BIT_DEPTH_REDUCED,
+            "16-bit samples normalized to 8-bit on decode",
+        ));
+    }
+
     let orientation = core::metadata::exif_orientation(payload).filter(|o| *o != 1);
     if let Some(o) = orientation {
         match opts.orient {

@@ -182,6 +182,49 @@ impl Codec for WebpCodec {
         }
     }
 
+    /// Encode an animation with webp-animation's mux-based encoder.
+    /// Timestamps are cumulative (start-of-frame) with a final add to close
+    /// the last frame's duration. lossless encoding keeps full-RGBA exactness
+    /// per frame; loop_count 0 = infinite (webp mux convention).
+    fn encode_animated(&self, anim: &AnimatedImage, opts: &EncodeOptions) -> Result<Vec<u8>> {
+        if anim.width > MAX_DIMENSION || anim.height > MAX_DIMENSION {
+            return Err(WcError::ResourceLimit(format!(
+                "webp encoders support at most {MAX_DIMENSION}x{MAX_DIMENSION} pixels, got {}x{}",
+                anim.width, anim.height
+            )));
+        }
+        if anim.frames.is_empty() {
+            return Err(WcError::Internal(
+                "cannot encode an animation with no frames".into(),
+            ));
+        }
+        let mut options = webp_animation::EncoderOptions::default();
+        options.anim_params.loop_count = anim.loop_count.unwrap_or(0);
+        let mut enc = webp_animation::Encoder::new_with_options((anim.width, anim.height), options)
+            .map_err(|e| WcError::Internal(format!("webp animation encoder failed: {e}")))?;
+
+        if !opts.lossless {
+            let quality = opts.quality.unwrap_or(80.0).clamp(0.0, 100.0);
+            let mut cfg = webp_animation::EncodingConfig::new_lossy(quality);
+            if let Some(m) = opts.method {
+                cfg.method = m.clamp(0, 6) as usize;
+            }
+            enc.set_default_encoding_config(cfg)
+                .map_err(|e| WcError::Internal(format!("webp animation config failed: {e}")))?;
+        }
+
+        let mut ts: i32 = 0;
+        for f in &anim.frames {
+            enc.add_frame(&f.still.rgba, ts)
+                .map_err(|e| WcError::Internal(format!("webp animation add_frame: {e}")))?;
+            ts += f.duration_ms as i32;
+        }
+        let data = enc
+            .finalize(ts)
+            .map_err(|e| WcError::Internal(format!("webp animation finalize: {e}")))?;
+        Ok(data.to_vec())
+    }
+
     fn caps(&self) -> FormatCaps {
         let v = unsafe { libwebp_sys::WebPGetEncoderVersion() };
         FormatCaps {

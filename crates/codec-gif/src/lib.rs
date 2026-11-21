@@ -108,13 +108,50 @@ impl Codec for GifCodec {
         Ok(out)
     }
 
+    /// Encode an animation: full-canvas RGBA frames quantized per frame
+    /// (256 colors, 1-bit transparency) by the image crate's GIF encoder.
+    /// Timing maps ms → GIF's 1/100 s units (rounding up, min 1 unit);
+    /// some duration information below 10 ms granularity is unavoidably
+    /// lost by the format — declared, not silent.
+    fn encode_animated(
+        &self,
+        anim: &core::model::AnimatedImage,
+        _opts: &EncodeOptions,
+    ) -> Result<Vec<u8>> {
+        if anim.frames.is_empty() {
+            return Err(WcError::Internal(
+                "cannot encode an animation with no frames".into(),
+            ));
+        }
+        let (w, h) = (anim.width, anim.height);
+        let mut out = Vec::new();
+        {
+            let mut enc = image::codecs::gif::GifEncoder::new(&mut out);
+            enc.set_repeat(image::codecs::gif::Repeat::Infinite)
+                .map_err(|e| WcError::Internal(format!("gif repeat setup failed: {e}")))?;
+            for f in &anim.frames {
+                let buffer = image::RgbaImage::from_raw(w, h, f.still.rgba.clone())
+                    .ok_or_else(|| WcError::Internal("animation frame buffer mismatch".into()))?;
+                let fr = image::Frame::from_parts(
+                    buffer,
+                    0,
+                    0,
+                    image::Delay::from_numer_denom_ms(f.duration_ms.max(10), 1),
+                );
+                enc.encode_frame(fr)
+                    .map_err(|e| WcError::Internal(format!("gif animation encode: {e}")))?;
+            }
+        }
+        Ok(out)
+    }
+
     fn caps(&self) -> FormatCaps {
         FormatCaps {
             format: "gif".into(),
             read: true,
             write: true,
             animation_read: true,
-            animation_write: false, // animated GIF write is P1
+            animation_write: true,
             alpha_read: true,
             alpha_write: true,
             metadata_read: vec!["xmp".into(), "comments".into()],
@@ -125,8 +162,11 @@ impl Codec for GifCodec {
             backend_version: env!("CARGO_PKG_VERSION").into(),
             restrictions: vec![
                 "256-color palette; RGBA stills are quantized (diagnosed)".into(),
-                "only binary (1-bit) transparency; partial alpha is lost by the format".into(),
-                "animated GIF write is not implemented in v0".into(),
+                "only binary (1-bit) transparency; partial alpha is lost by the format (diagnosed)"
+                    .into(),
+                "timing quantizes to 1/100 s units; delays under 10 ms become one unit".into(),
+                "animated output loops infinitely (input loop count is not exposed by the decoder)"
+                    .into(),
             ],
         }
     }

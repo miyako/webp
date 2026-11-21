@@ -205,7 +205,10 @@ def accept(root, tool4d, *, repository=None, require_apple_signing=False):
         from sign_release import release_policy
         signing = bool(release_policy(root)) or require_apple_signing
         artifact = step("package", lambda: package(root, tag=cfg["version"]))
-        report["artifact"] = {"path": str(artifact), "sha256": sha256(artifact),
+        # quickdraw parity: evidence paths are root-relative POSIX strings,
+        # never absolute — the verifier may run on a different runner OS.
+        report["artifact"] = {"path": "dist/" + artifact.name,
+                              "sha256": sha256(artifact),
                               "bytes": Path(artifact).stat().st_size, "signed": signing}
         unsigned_hash = report["artifact"]["sha256"]
         save()
@@ -219,7 +222,7 @@ def accept(root, tool4d, *, repository=None, require_apple_signing=False):
                 "signed_files": [entry["path"] for entry in proof["signedFiles"]]}
             if final_zip.resolve() != Path(artifact).resolve():
                 raise PipelineError("signing did not replace the published archive in place")
-            report["unsigned_artifact"] = {"path": str(artifact), "sha256": unsigned_hash}
+            report["unsigned_artifact"] = {"path": "dist/" + artifact.name, "sha256": unsigned_hash}
             report["artifact"]["sha256"] = sha256(regular(final_zip))
             report["artifact"]["bytes"] = final_zip.stat().st_size
             if report["artifact"]["sha256"] == unsigned_hash:

@@ -55,10 +55,13 @@ def acceptance_assets(root, cfg):
         raise PipelineError("hosted acceptance evidence is not a finished partial-pass report")
     artifact = report["artifact"]
     config_version = cfg["version"]
-    if (artifact.get("path") != str(dist / (prefix + ".zip"))
+    # quickdraw parity: the evidence identifies the archive by root-relative
+    # path so a different runner OS (publish job) can still verify it.
+    expected_path = "dist/" + prefix + ".zip"
+    if (artifact.get("path") != expected_path
             or not re.fullmatch(r"[0-9a-f]{64}", str(artifact.get("sha256")))
             or not isinstance(artifact.get("bytes"), int)):
-        raise PipelineError("acceptance evidence does not identify the final archive")
+        raise PipelineError("acceptance evidence does not identify the final archive (expected path " + expected_path + ")")
     assets = [{
         "path": "dist/" + prefix + ".zip", "sha256": artifact["sha256"],
         "bytes": artifact["bytes"], "signed": artifact.get("signed") is True,

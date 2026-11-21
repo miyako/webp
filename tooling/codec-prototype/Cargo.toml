@@ -1,0 +1,19 @@
+[package]
+name = "codec-prototype"
+version = "0.0.0"
+edition = "2021"
+publish = false
+description = "WebP Converter CLI feasibility prototype -- NOT a product artifact (plan T04/WP-02/WP-04)"
+
+[dependencies]
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "tiff", "bmp"] }
+# libwebp bindings (lossy + lossless encode, decode)
+webp = "0.3"
+# animated WebP decode/encode over libwebp (libwebp-sys2)
+webp-animation = "0.10"
+# animated GIF
+gif = "0.14"
+# EXIF read-only
+
+[profile.dev]
+debug = false

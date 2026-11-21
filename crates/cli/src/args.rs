@@ -102,6 +102,17 @@ pub struct Cli {
     #[arg(long, value_name = "BYTES", default_value_t = 512 * 1024 * 1024)]
     pub max_input_bytes: u64,
 
+    /// Maximum accepted frame count (checked before decode from the header)
+    #[arg(long, value_name = "N")]
+    pub max_frames: Option<u32>,
+
+    /// Processing deadline in seconds, checked between pipeline stages
+    /// (read/decode/encode/write). Blocking native codec calls and a
+    /// stalled stdin cannot be interrupted mid-call; the calling wrapper
+    /// may enforce a hard limit externally.
+    #[arg(long, value_name = "SECONDS")]
+    pub timeout: Option<u64>,
+
     /// Overwrite an existing output file (off by default)
     #[arg(long)]
     pub overwrite: bool,

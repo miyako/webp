@@ -3,6 +3,7 @@
 //! silent data loss lives here, not in codecs or I/O.
 
 use std::str::FromStr;
+use std::time::{Duration, Instant};
 
 use core::{
     codec::Codec,
@@ -137,18 +138,63 @@ fn emit_diagnostics(cli: &Cli, diags: &[Diagnostic]) {
 // convert
 // ---------------------------------------------------------------------------
 
+/// Processing deadline: `--timeout` bounds the pipeline between stages.
+/// Native codec calls and blocking reads cannot be interrupted from within;
+/// this catches cumulative overrun between them (plan §6.4 "where feasible";
+/// a wrapper can enforce a hard kill externally).
+struct Deadline {
+    start: Instant,
+    limit: Option<Duration>,
+}
+
+impl Deadline {
+    fn from_cli(cli: &Cli) -> Deadline {
+        Deadline {
+            start: Instant::now(),
+            limit: cli.timeout.map(Duration::from_secs),
+        }
+    }
+
+    fn check(&self, stage: &str) -> Result<()> {
+        let Some(limit) = self.limit else {
+            return Ok(());
+        };
+        if self.start.elapsed() > limit {
+            return Err(WcError::ResourceLimit(format!(
+                "processing deadline of {}s exceeded at stage '{stage}'; \
+                 re-run with a larger --timeout or drop the flag",
+                limit.as_secs()
+            )));
+        }
+        Ok(())
+    }
+}
+
 fn run_convert(cli: &Cli) -> Result<i32> {
+    let deadline = Deadline::from_cli(cli);
     let inv = args::resolved_io(cli, &cli.command)?;
     let input = io::read_input(&inv.input, cli.max_input_bytes)?;
+    deadline.check("read")?;
     let codec = choose_input_codec(&input.bytes, &inv.input, cli.from)?;
     let info = codec
         .inspect(&input.bytes)
         .map_err(|e| WcError::CorruptInput(format!("could not read {}: {e}", input.origin)))?;
 
+    // frame-count budget comes from the header, before any decode work
+    if let Some(max_frames) = cli.max_frames {
+        if info.frames > max_frames {
+            return Err(WcError::ResourceLimit(format!(
+                "image carries {} frames; exceeds --max-frames {max_frames}",
+                info.frames
+            )));
+        }
+    }
+
     let mut diags: Vec<Diagnostic> = Vec::new();
 
     // ---- decode ----
     let mut still = decode_still(codec, &input.bytes, cli)?;
+    deadline.check("decode")?;
 
     // ---- limits ----
     let max_pixels = u64::from(cli.max_pixels_mp) * 1_000_000;
@@ -211,6 +257,7 @@ fn run_convert(cli: &Cli) -> Result<i32> {
     let bytes = target_codec.encode_still(&still, &opts).map_err(|e| {
         WcError::Internal(format!("could not encode {} output: {e}", target.as_str()))
     })?;
+    deadline.check("encode")?;
 
     // ---- output routing ----
     match io::resolve_output(&inv.output)? {
@@ -223,6 +270,7 @@ fn run_convert(cli: &Cli) -> Result<i32> {
             io::write_output_file(&path, &bytes)?;
         }
     }
+    deadline.check("write")?;
 
     let mut report = Report::success("convert");
     report.input = Some(input_payload(&info));

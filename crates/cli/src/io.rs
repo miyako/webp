@@ -16,10 +16,12 @@ pub struct Input {
 
 pub fn read_input(spec: &str, max_bytes: u64) -> Result<Input> {
     if spec == "-" {
+        // read one byte beyond the limit: take(max) would silently truncate
+        // AT the limit and never trigger the check below
         let mut bytes = Vec::new();
         std::io::stdin()
             .lock()
-            .take(max_bytes)
+            .take(max_bytes.saturating_add(1))
             .read_to_end(&mut bytes)
             .map_err(|e| WcError::UnsupportedInput(format!("failed to read stdin: {e}")))?;
         if bytes.len() as u64 > max_bytes {

@@ -77,6 +77,8 @@ explicit instruction:
 | `--flatten` | animation flattening (P1; refused in v0) |
 | `--max-pixels-mp MP` | pixel budget (default 100 Mp) |
 | `--max-input-bytes BYTES` | input size budget (default 512 MiB) |
+| `--max-frames N` | frame-count budget, checked from the container header *before* decode (default: unlimited; animated input is refused without `--frame` anyway) |
+| `--timeout SECONDS` | processing deadline, checked between pipeline stages (read → decode → encode → write); breach exits 4. Not a hard kill: blocking native codec calls and a stalled stdin cannot be interrupted from inside the process — enforce a hard limit in the wrapper if that matters |
 | `--overwrite` | allow replacing an existing output file |
 | `--dry-run` | run detect/decode/policy, write nothing, report intended output |
 | `--json` | machine-readable protocol-v1 report |
@@ -106,6 +108,29 @@ stable codes from plan §7.4 (`missing_option`, `unsupported_input`,
 reports never join it — the JSON/human report moves to stderr. Otherwise
 JSON reports go to stdout. Human-readable progress/diagnostics always go to
 stderr, so stdout stays scriptable either way.
+
+## Streams
+
+All four input/output combinations work in both call forms:
+
+| form | input | output |
+| --- | --- | --- |
+| `webp-convert in.png out.webp` / `convert in.png out.webp` | file | file |
+| `webp-convert - out.webp` / `cat \| webp-convert - out.webp` | stdin | file |
+| `webp-convert in.png -` | file | stdout |
+| `webp-convert - -` / `cat in.png \| webp-convert - -` | stdin | stdout |
+
+Rules:
+
+- Input format is detected from magic bytes regardless of stream (no
+  extension to lean on for stdin); `--from FMT` forces it.
+- **`-` as output plus no `--format` keeps the input format.** Every other
+  output name takes its format from its extension (overridable).
+- Emptiness and limits on stdin: an empty stdin is exit 3; stdin over
+  `--max-input-bytes` is exit 4 (the reader stops *after* the budget, it
+  never silently truncates at it).
+- A run that fails at any stage writes nothing to stdout and produces no
+  partial file; the report (JSON or human) goes to stderr in `-o -` mode.
 
 ## Reporting what a build can do
 

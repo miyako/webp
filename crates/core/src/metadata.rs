@@ -54,6 +54,18 @@ pub fn exif_orientation(data: &[u8]) -> Option<u8> {
     u8::try_from(v).ok().filter(|o| (1..=8).contains(o))
 }
 
+/// Maximum sample depth (BitsPerSample) of a TIFF container's primary image,
+/// via the `exif` crate. Used to warn when 16-bit input is down-converted to
+/// 8-bit (never silently — plan §5.4). Returns None for non-TIFF payloads or
+/// when the tag is absent.
+pub fn tiff_max_bits_per_sample(data: &[u8]) -> Option<u16> {
+    let mut cursor = std::io::Cursor::new(data);
+    let exif = exif::Reader::new().read_from_container(&mut cursor).ok()?;
+    let field = exif.get_field(exif::Tag::BitsPerSample, exif::In::PRIMARY)?;
+    let iter = field.value.iter_uint()?;
+    iter.max().and_then(|v| u16::try_from(v).ok())
+}
+
 pub fn probe(data: &[u8], format: ImageFormat) -> MetadataPresence {
     match format {
         ImageFormat::Jpeg => probe_jpeg(data),

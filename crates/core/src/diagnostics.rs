@@ -40,6 +40,9 @@ pub mod codes {
     pub const EXTENSION_MISMATCH: &str = "extension_mismatch";
     pub const METADATA_DROPPED: &str = "metadata_dropped";
     pub const ALPHA_FLATTENED: &str = "alpha_flattened";
+    pub const ALPHA_REDUCED: &str = "alpha_reduced";
+    pub const ANIMATION_FLATTENED: &str = "animation_flattened";
+    pub const BIT_DEPTH_REDUCED: &str = "bit_depth_reduced";
     pub const OPTIONS_IGNORED: &str = "options_ignored";
     pub const PREMULTIPLIED_SAMPLED_ALPHA: &str = "lossy_alpha";
     pub const ORIENTATION_IGNORED: &str = "orientation_ignored";

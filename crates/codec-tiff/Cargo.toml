@@ -9,6 +9,7 @@ publish = false
 [dependencies]
 webp-convert-core.workspace = true
 image.workspace = true
+tiff.workspace = true
 
 [lib]
 name = "codec_tiff"

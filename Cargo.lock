@@ -824,6 +824,7 @@ name = "webp-convert-codec-tiff"
 version = "0.1.0"
 dependencies = [
  "image",
+ "tiff",
  "webp-convert-core",
 ]
 

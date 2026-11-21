@@ -31,6 +31,8 @@ thiserror = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "tiff", "bmp"] }
 kamadak-exif = "0.6"
 gif = "0.14"
+# direct page-by-page TIFF decode (--page; the image crate exposes no pages)
+tiff = "0.11"
 clap = { version = "4", features = ["derive"] }
 # static = always build vendored libwebp (never link a system/Homebrew/vcpkg libwebp,
 # which would break portability and reproducibility -- see ADR-002/ADR-015);

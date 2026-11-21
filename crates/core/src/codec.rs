@@ -3,7 +3,7 @@
 
 use crate::error::{Result, WcError};
 use crate::format::ImageFormat;
-use crate::model::{Decoded, ImageInfo, StillImage};
+use crate::model::{AnimatedImage, Decoded, ImageInfo, StillImage};
 use crate::policy::EncodeOptions;
 use crate::protocol::FormatCaps;
 
@@ -30,9 +30,26 @@ pub trait Codec: Send + Sync {
         ))
     }
 
+    /// Decode a single page of a multi-page container as a still image.
+    /// Default: unsupported.
+    fn decode_page(&self, _data: &[u8], _index: u32) -> Result<StillImage> {
+        Err(WcError::InvalidArguments(
+            "page selection is not supported for this format".into(),
+        ))
+    }
+
     /// Encode a still image; codecs that cannot express an option should
     /// reject (never silently ignore) unsupported options.
     fn encode_still(&self, img: &StillImage, opts: &EncodeOptions) -> Result<Vec<u8>>;
+
+    /// Encode an animation, preserving frame timing. Frame buffers are
+    /// full-canvas. Default: unsupported (the CLI refuses rather than
+    /// silently writing only one frame).
+    fn encode_animated(&self, _anim: &AnimatedImage, _opts: &EncodeOptions) -> Result<Vec<u8>> {
+        Err(WcError::Internal(
+            "animated write is not implemented for this codec".into(),
+        ))
+    }
 
     /// Actual capabilities of this build (plan §8).
     fn caps(&self) -> FormatCaps;

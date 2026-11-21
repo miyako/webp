@@ -245,10 +245,12 @@
     `NOTARYTOOL_{APPLE_ID,TEAM_ID,PASSWORD}`, optional `CODESIGN_APPLE_ID`)
     are installed by the user-run `4d/scripts/set-release-secrets.sh`
     helper; agents never handle them.
-  - tool4d pin precedence: repository variables `TOOL4D_URL` +
-    `TOOL4D_SHA256` (primary), falling back to the official
-    `resources-download.4d.com` / `builds2.4d.com` download verified against
-    the package pin when a `tool.sha256` exists.
+  - tool4d pin precedence (quickdraw parity): `--url/--sha256` > repository
+    variables `TOOL4D_URL` + `TOOL4D_SHA256` (paired override only) >
+    the canonical `package.json.tool` pin (version + build + SHA-256),
+    whose official `resources-download.4d.com` URL is derived and whose
+    download digest is verified before use. The pin for 20.7 build 101905
+    is recorded and locally verified; the workflows need no variables.
 - **Alternatives:** Local-only release (rejected: no Apple notarization or
   hosted evidence possible from this machine); per-run ad-hoc scripts
   (rejected: quickdraw's audited, fail-closed scripts are the reviewed

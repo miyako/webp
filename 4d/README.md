@@ -146,8 +146,14 @@ Repository configuration required once:
 | Item | Kind | Purpose |
 |---|---|---|
 | `FOURD_ENABLED` | variable | `true` enables the 4D acceptance + release jobs |
-| `TOOL4D_URL` | variable | official pinned tool4d app-archive URL (`resources-download.4d.com` / `builds2.4d.com`) |
-| `TOOL4D_SHA256` | variable | SHA-256 of that exact archive |
+| `TOOL4D_URL` | variable (optional) | override pin: official tool4d app-archive URL (`resources-download.4d.com` / `builds2.4d.com`) — must be paired with `TOOL4D_SHA256` |
+| `TOOL4D_SHA256` | variable (optional) | SHA-256 for the `TOOL4D_URL` override |
+
+The canonical tool4d pin lives in `4d/package.json` → `tool` (version,
+build, SHA-256); the workflows resolve and verify it with no variables set,
+exactly like quickdraw. `TOOL4D_URL`/`TOOL4D_SHA256` only exist to override
+a bad pin without a code change (e.g. a build pulled from
+`builds2.4d.com`); both must be set together and never fall back silently.
 | `APPLE_DEVELOPER_ID_CERTIFICATE` | secret | base64 PKCS#12 Developer ID Application certificate |
 | `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD` | secret | PKCS#12 passphrase |
 | `KEYCHAIN_PASSWORD` | secret | password for the ephemeral CI keychain (any strong random value) |

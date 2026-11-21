@@ -22,10 +22,36 @@ use webp_convert_core as core;
 
 pub struct GifCodec;
 
+/// Absolute canvas budget used to guard GIF inspection before any frame
+/// compositing happens. The `image` crate composites each frame onto a
+/// full logical-screen buffer; a header alone can request 65535x65535
+/// (~17 GB), which must fail fast, not OOM. This is a safety ceiling
+/// independent of the CLI's --max-pixels-mp flag (which is checked after
+/// inspect). Normal GIFs stay far below it.
+const MAX_INSPECT_PIXELS: u64 = 64 * 1024 * 1024;
+
 impl GifCodec {
     fn animated(data: &[u8]) -> Result<core::model::AnimatedImage> {
-        let dec = image::codecs::gif::GifDecoder::new(Cursor::new(data))
+        // cheap header check before the decoder composites any frame
+        if data.len() >= 10 {
+            let w = u64::from(u16::from_le_bytes([data[6], data[7]]));
+            let h = u64::from(u16::from_le_bytes([data[8], data[9]]));
+            if w * h > MAX_INSPECT_PIXELS {
+                return Err(WcError::ResourceLimit(format!(
+                    "GIF canvas {w}x{h} ({p} pixels) exceeds the {m} pixel safety limit",
+                    p = w * h,
+                    m = MAX_INSPECT_PIXELS
+                )));
+            }
+        }
+        // the header gate above is cheap; the decoder itself allocates the
+        // full composite canvas per frame, so also hand it explicit limits
+        // (GifDecoder defaults to no_limits(); ImageReader's 512 MiB default
+        // is what the other codecs already get via load_from_memory)
+        let mut dec = image::codecs::gif::GifDecoder::new(Cursor::new(data))
             .map_err(|e| WcError::CorruptInput(e.to_string()))?;
+        dec.set_limits(image::Limits::default())
+            .map_err(|e| WcError::ResourceLimit(format!("GIF exceeds decode limits: {e}")))?;
         let (w, h) = (dec.dimensions().0, dec.dimensions().1);
         let mut frames = Vec::new();
         for f in dec.into_frames() {
@@ -70,7 +96,13 @@ impl Codec for GifCodec {
         let (w, h) = reader
             .into_dimensions()
             .map_err(|e| WcError::CorruptInput(e.to_string()))?;
-        let frames = Self::animated(data).map(|a| a.frames.len()).unwrap_or(1);
+        // inspect needs the frame count from a real composite pass; a
+        // resource-limit finding must propagate, not degrade to "1 frame"
+        let frames = match Self::animated(data) {
+            Ok(a) => a.frames.len(),
+            Err(e @ WcError::ResourceLimit(_)) => return Err(e),
+            Err(_) => 1,
+        };
         Ok(ImageInfo {
             format: "gif".into(),
             width: w,
@@ -88,9 +120,13 @@ impl Codec for GifCodec {
         if anim.frames.len() > 1 {
             Ok(Decoded::Animated(anim))
         } else {
-            Ok(Decoded::Still(
-                anim.frames.into_iter().next().expect("one frame").still,
-            ))
+            // a GIF whose only "frame" fails to decode composites to an
+            // empty list here; that is corrupt input, not a panic
+            let f =
+                anim.frames.into_iter().next().ok_or_else(|| {
+                    WcError::CorruptInput("GIF carries no decodable frames".into())
+                })?;
+            Ok(Decoded::Still(f.still))
         }
     }
 
@@ -190,5 +226,24 @@ impl Codec for GifCodec {
             })?
             .clone();
         Ok(frame.still)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Regression (fuzzing, phase 6): a 20-byte header claiming a 65535x65535
+    /// logical screen must hit the inspection safety ceiling, never the
+    /// 17 GB composite allocation.
+    #[test]
+    fn oversized_canvas_is_a_resource_limit_before_compositing() {
+        let mut data = b"GIF89a".to_vec();
+        data.extend_from_slice(&0xFFFFu16.to_le_bytes()); // logical width
+        data.extend_from_slice(&0xFFFFu16.to_le_bytes()); // logical height
+        data.extend_from_slice(b"\0garbage");
+        let err = GifCodec.inspect(&data).unwrap_err();
+        assert!(matches!(err, WcError::ResourceLimit(_)), "got: {err}");
+        assert_eq!(err.exit_code(), 4);
     }
 }

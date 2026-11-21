@@ -226,6 +226,50 @@ fn inspect_reports_dimensions_and_alpha() {
 // limits & resource guards
 // ---------------------------------------------------------------------------
 
+/// Regression (found by fuzzing, phase 6): a 20-byte GIF header declaring a
+/// 65535x65535 logical screen must fail fast with a resource-limit error,
+/// never allocate the 17 GB composite buffer during `inspect`.
+#[test]
+fn gif_header_oversized_canvas_fails_fast() {
+    let dir = tempfile::tempdir().unwrap();
+    let src = dir.path().join("huge.gif");
+    std::fs::write(
+        &src,
+        [
+            0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0xff, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, b'g',
+            b'a', b'r', b'b', b'a', b'g', b'e',
+        ],
+    )
+    .unwrap();
+    let out = dir.path().join("out.png");
+    let o = cmd()
+        .args(["-i", src.to_str().unwrap(), "-o", out.to_str().unwrap()])
+        .output()
+        .unwrap();
+    assert_eq!(
+        o.status.code(),
+        Some(4),
+        "stderr: {}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    assert!(String::from_utf8_lossy(&o.stderr).contains("exceeds the 67108864 pixel safety limit"));
+    assert!(!out.exists());
+
+    // and --json surfaces it the same way
+    let o = cmd()
+        .args([
+            "-i",
+            src.to_str().unwrap(),
+            "-o",
+            out.to_str().unwrap(),
+            "--json",
+        ])
+        .output()
+        .unwrap();
+    let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(v["error"]["code"], "resource_limit_exceeded");
+}
+
 #[test]
 fn max_pixels_limit_refuses_oversize() {
     let dir = tempfile::tempdir().unwrap();

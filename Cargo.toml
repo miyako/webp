@@ -10,7 +10,7 @@ members = [
     "crates/codec-bmp",
     "crates/cli",
 ]
-exclude = ["tooling/codec-prototype"]
+exclude = ["tooling/codec-prototype", "fuzz"]
 
 [workspace.package]
 version = "0.1.0"

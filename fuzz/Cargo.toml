@@ -1,0 +1,37 @@
+[package]
+name = "webp-convert-core-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+# standalone workspace, excluded from the repo-root workspace (fuzzing needs
+# nightly + sanitizer flags that must never leak into normal builds)
+[workspace]
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+
+webp-convert-core = { path = "../crates/core" }
+webp-convert-codec-png = { path = "../crates/codec-png" }
+webp-convert-codec-jpeg = { path = "../crates/codec-jpeg" }
+webp-convert-codec-gif = { path = "../crates/codec-gif" }
+webp-convert-codec-tiff = { path = "../crates/codec-tiff" }
+webp-convert-codec-bmp = { path = "../crates/codec-bmp" }
+webp-convert-codec-webp = { path = "../crates/codec-webp" }
+
+[[bin]]
+name = "sniff_extract_decode"
+path = "fuzz_targets/sniff_extract_decode.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "webp_container"
+path = "fuzz_targets/webp_container.rs"
+test = false
+doc = false
+bench = false

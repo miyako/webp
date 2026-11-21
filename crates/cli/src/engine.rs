@@ -176,9 +176,23 @@ fn run_convert(cli: &Cli) -> Result<i32> {
     let input = io::read_input(&inv.input, cli.max_input_bytes)?;
     deadline.check("read")?;
     let codec = choose_input_codec(&input.bytes, &inv.input, cli.from)?;
-    let info = codec
-        .inspect(&input.bytes)
-        .map_err(|e| WcError::CorruptInput(format!("could not read {}: {e}", input.origin)))?;
+    let info = codec.inspect(&input.bytes).map_err(|e| match e {
+        // resource-limit findings from header checks keep their exit
+        // semantics; only decode failures become corrupt-input errors
+        e @ WcError::ResourceLimit(_) => e,
+        e => WcError::CorruptInput(format!("could not read {}: {e}", input.origin)),
+    })?;
+
+    // pixel budget comes from the declared geometry, before any decode work
+    // (decoders composite onto full-canvas buffers for animated input)
+    let info_pixels = u64::from(info.width) * u64::from(info.height);
+    let max_pixels = u64::from(cli.max_pixels_mp) * 1_000_000;
+    if info_pixels > max_pixels {
+        return Err(WcError::ResourceLimit(format!(
+            "image canvas is {}x{} ({info_pixels} pixels); exceeds --max-pixels-mp {} ({max_pixels} pixels)",
+            info.width, info.height, cli.max_pixels_mp
+        )));
+    }
 
     // frame-count budget comes from the header, before any decode work
     if let Some(max_frames) = cli.max_frames {
@@ -201,7 +215,6 @@ fn run_convert(cli: &Cli) -> Result<i32> {
         Decoded::Still(s) => (s.pixel_count(), s.width, s.height),
         Decoded::Animated(a) => (u64::from(a.width) * u64::from(a.height), a.width, a.height),
     };
-    let max_pixels = u64::from(cli.max_pixels_mp) * 1_000_000;
     if canvas.0 > max_pixels {
         return Err(WcError::ResourceLimit(format!(
             "image canvas is {}x{} ({} pixels); exceeds --max-pixels-mp {} ({} pixels)",
@@ -230,7 +243,7 @@ fn run_convert(cli: &Cli) -> Result<i32> {
                     .frames
                     .into_iter()
                     .next()
-                    .expect("frames.len() > 0 for animated");
+                    .ok_or_else(|| WcError::Internal("animated image with no frames".into()))?;
                 diags.push(Diagnostic::warning(
                     codes::ANIMATION_FLATTENED,
                     format!("flattened {n}-frame animation to its first frame (--flatten)"),
@@ -477,7 +490,11 @@ fn decode_input(
     match codec.decode(payload)? {
         Decoded::Still(s) => Ok(Decoded::Still(s)),
         Decoded::Animated(a) if a.frames.len() <= 1 => Ok(Decoded::Still(
-            a.frames.into_iter().next().expect(">= 1 frame").still,
+            a.frames
+                .into_iter()
+                .next()
+                .ok_or_else(|| WcError::Internal("animated image with no frames".into()))?
+                .still,
         )),
         // multi-frame animations are always handed through: run_convert owns
         // the routing decision (--flatten → first frame, --frame handled

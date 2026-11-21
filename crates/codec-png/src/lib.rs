@@ -91,7 +91,7 @@ impl Codec for PngCodec {
             restrictions: vec![
                 "APNG input decodes to its first frame (documented loss)".into(),
                 "16-bit input normalizes to 8-bit (diagnosed)".into(),
-                "metadata is detected and reported as dropped (P1 write-through)".into(),
+                "input ICC/EXIF/XMP is carried to WebP targets only; PNG writes do not embed metadata".into(),
             ],
         }
     }

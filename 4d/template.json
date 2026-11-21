@@ -1,0 +1,12 @@
+{
+  "schema": 1,
+  "initialized": true,
+  "repository": "webp",
+  "namespace": "WebP",
+  "cli": "webp-convert",
+  "language": "rust",
+  "cli_source": "local-webp-v1",
+  "feature": "WebP, PNG, JPEG, GIF, BMP and TIFF conversion and inspection using verified external webp-convert assets",
+  "version": "20.0.0",
+  "feature_class": "Converter"
+}

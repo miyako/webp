@@ -1,0 +1,442 @@
+{
+  "schema": 1,
+  "feature": {
+    "casesPath": "/cases",
+    "caseCount": 2,
+    "caseAssertions": [
+      {
+        "path": "/ok",
+        "equals": true
+      },
+      {
+        "path": "/value/protocol",
+        "equals": 1
+      },
+      {
+        "path": "/value/ok",
+        "equals": true
+      },
+      {
+        "path": "/value/operation",
+        "equals": "convert"
+      },
+      {
+        "path": "/value/output/format",
+        "matches": "(webp|jpeg)"
+      },
+      {
+        "path": "/value/output/mode",
+        "matches": ".+"
+      }
+    ]
+  },
+  "execution": {
+    "successPaths": [
+      "/version",
+      "/capabilities",
+      "/inspection",
+      "/fileArgument",
+      "/firstWrite",
+      "/overwrite",
+      "/options",
+      "/versionGood",
+      "/renamedExecutable"
+    ],
+    "assertions": [
+      {
+        "path": "/outputChecks",
+        "length": 2,
+        "each": [
+          {
+            "path": "",
+            "equals": true
+          }
+        ]
+      },
+      {
+        "path": "/inputPreserved",
+        "equals": true
+      },
+      {
+        "path": "/version/ok",
+        "equals": true
+      },
+      {
+        "path": "/version/value/version",
+        "equals": "1.0.0"
+      },
+      {
+        "path": "/capabilities/ok",
+        "equals": true
+      },
+      {
+        "path": "/capabilities/value/protocol",
+        "equals": 1
+      },
+      {
+        "path": "/capabilities/value/capabilities",
+        "length": 6,
+        "each": [
+          {
+            "path": "/format",
+            "matches": "(webp|png|jpeg|gif|bmp|tiff)"
+          }
+        ]
+      },
+      {
+        "path": "/inspection/ok",
+        "equals": true
+      },
+      {
+        "path": "/inspection/value/operation",
+        "equals": "inspect"
+      },
+      {
+        "path": "/inspection/value/input/format",
+        "equals": "png"
+      },
+      {
+        "path": "/inspection/value/input/width",
+        "equals": 48
+      },
+      {
+        "path": "/inspection/value/input/height",
+        "equals": 32
+      },
+      {
+        "path": "/inspection/value/input/frames",
+        "equals": 1
+      },
+      {
+        "path": "/inspection/value/input/has_alpha",
+        "equals": true
+      },
+      {
+        "path": "/fileArgument/exitCode",
+        "equals": 0
+      },
+      {
+        "path": "/renamedExecutable/exitCode",
+        "equals": 0
+      },
+      {
+        "path": "/options/ok",
+        "equals": true
+      },
+      {
+        "path": "/options/value/output/format",
+        "equals": "webp"
+      },
+      {
+        "path": "/missingBackground/ok",
+        "equals": true
+      },
+      {
+        "path": "/malformed/failureKind",
+        "equals": "converter"
+      },
+      {
+        "path": "/malformed/error/code",
+        "equals": "corrupt_input"
+      },
+      {
+        "path": "/malformed/exitCode",
+        "equals": 3
+      },
+      {
+        "path": "/missingInput/error/code",
+        "equals": "unsupported_input"
+      },
+      {
+        "path": "/missingInput/exitCode",
+        "equals": 3
+      },
+      {
+        "path": "/limit/failureKind",
+        "equals": "converter"
+      },
+      {
+        "path": "/limit/error/code",
+        "equals": "resource_limit_exceeded"
+      },
+      {
+        "path": "/limit/exitCode",
+        "equals": 4
+      },
+      {
+        "path": "/firstWrite/ok",
+        "equals": true
+      },
+      {
+        "path": "/noClobber/failureKind",
+        "equals": "converter"
+      },
+      {
+        "path": "/noClobber/error/code",
+        "equals": "output_error"
+      },
+      {
+        "path": "/noClobber/exitCode",
+        "equals": 5
+      },
+      {
+        "path": "/overwrite/ok",
+        "equals": true
+      },
+      {
+        "path": "/badOption/failureKind",
+        "equals": "argument"
+      },
+      {
+        "path": "/badOption/error/code",
+        "equals": "invalid_argument"
+      },
+      {
+        "path": "/badType/failureKind",
+        "equals": "argument"
+      },
+      {
+        "path": "/badFlag/failureKind",
+        "equals": "argument"
+      },
+      {
+        "path": "/badNumber/failureKind",
+        "equals": "argument"
+      },
+      {
+        "path": "/missingFile/error/code",
+        "equals": "invalid_argument"
+      },
+      {
+        "path": "/missingArguments/error/code",
+        "equals": "invalid_argument"
+      },
+      {
+        "path": "/missing/error/code",
+        "equals": "missing_executable"
+      },
+      {
+        "path": "/unsupported/error/code",
+        "equals": "unsupported_architecture"
+      },
+      {
+        "path": "/rejectedArguments",
+        "length": 9,
+        "each": [
+          {
+            "path": "/result/error/code",
+            "equals": "invalid_argument"
+          }
+        ]
+      },
+      {
+        "path": "/rejectedInputs",
+        "length": 8,
+        "each": [
+          {
+            "path": "/ok",
+            "equals": false
+          },
+          {
+            "path": "/failureKind",
+            "equals": "argument"
+          }
+        ]
+      },
+      {
+        "path": "/rejectedOutputs",
+        "length": 8,
+        "each": [
+          {
+            "path": "/ok",
+            "equals": false
+          },
+          {
+            "path": "/failureKind",
+            "equals": "argument"
+          }
+        ]
+      },
+      {
+        "path": "/rejectedOptionValues",
+        "length": 4,
+        "each": [
+          {
+            "path": "/ok",
+            "equals": false
+          },
+          {
+            "path": "/failureKind",
+            "equals": "argument"
+          }
+        ]
+      },
+      {
+        "path": "/rejectedNul",
+        "length": 3,
+        "each": [
+          {
+            "path": "",
+            "equals": {
+              "ok": false,
+              "error": {
+                "code": "invalid_argument",
+                "message": "NUL is not permitted in process arguments"
+              }
+            }
+          }
+        ]
+      },
+      {
+        "path": "/folderArgument/exitCode",
+        "equals": 3
+      },
+      {
+        "path": "/folderRoundTrip",
+        "equals": true
+      },
+      {
+        "path": "/protocol/ok",
+        "equals": false
+      },
+      {
+        "path": "/protocol/error/code",
+        "equals": "invalid_protocol"
+      },
+      {
+        "path": "/protocolTypes",
+        "length": 2,
+        "each": [
+          {
+            "path": "/ok",
+            "equals": false
+          },
+          {
+            "path": "/stderr",
+            "equals": ""
+          },
+          {
+            "path": "/exitCode",
+            "equals": 0
+          },
+          {
+            "path": "/error/code",
+            "equals": "invalid_protocol"
+          },
+          {
+            "path": "/value",
+            "equals": null
+          }
+        ]
+      },
+      {
+        "path": "/protocolNull/ok",
+        "equals": false
+      },
+      {
+        "path": "/protocolNull/error/code",
+        "equals": "invalid_protocol"
+      },
+      {
+        "path": "/protocolScalars",
+        "length": 5,
+        "each": [
+          {
+            "path": "/ok",
+            "equals": false
+          },
+          {
+            "path": "/error/code",
+            "equals": "invalid_protocol"
+          }
+        ]
+      },
+      {
+        "path": "/protocolFailure/ok",
+        "equals": false
+      },
+      {
+        "path": "/protocolFailure/error/code",
+        "equals": "invalid_protocol"
+      },
+      {
+        "path": "/preservedError/failureKind",
+        "equals": "converter"
+      },
+      {
+        "path": "/preservedError/error/code",
+        "equals": "output_error"
+      },
+      {
+        "path": "/preservedError/value/error/future",
+        "equals": "retained"
+      },
+      {
+        "path": "/disagreeError/error/code",
+        "equals": "invalid_protocol"
+      },
+      {
+        "path": "/stderrFailure/error/code",
+        "equals": "invalid_protocol"
+      },
+      {
+        "path": "/usageError/failureKind",
+        "equals": "argument"
+      },
+      {
+        "path": "/usageError/error/code",
+        "equals": "invalid_arguments"
+      },
+      {
+        "path": "/terminated/failureKind",
+        "equals": "process"
+      },
+      {
+        "path": "/versionText",
+        "length": 5,
+        "each": [
+          {
+            "path": "/ok",
+            "equals": false
+          },
+          {
+            "path": "/error/code",
+            "equals": "invalid_protocol"
+          }
+        ]
+      },
+      {
+        "path": "/versionGood/ok",
+        "equals": true
+      },
+      {
+        "path": "/versionGood/value/version",
+        "equals": "1.0.0"
+      },
+      {
+        "path": "/versionDirty/ok",
+        "equals": false
+      },
+      {
+        "path": "/versionExit/ok",
+        "equals": false
+      },
+      {
+        "path": "/assetMissing/error/code",
+        "equals": "asset_mismatch"
+      },
+      {
+        "path": "/assetMissing/exitCode",
+        "absent": true
+      },
+      {
+        "path": "/assetMismatch/error/code",
+        "equals": "asset_mismatch"
+      },
+      {
+        "path": "/assetMismatch/exitCode",
+        "absent": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "schema": 1,
+  "repository": "miyako/webp",
+  "version": "1.0.0",
+  "tag": "v1.0.0",
+  "source_revision": "93259beab1802828980468d933eadba44bd8df62",
+  "assets": {
+    "macos": {
+      "url": "https://github.com/miyako/webp/releases/download/v1.0.0/webp-convert-1.0.0-universal2-apple-darwin.zip",
+      "target": "universal2-apple-darwin",
+      "sha256": "993b0b22814a0838c3307a448aa11fa7a5e369e0832c31f327b067e7b430000f",
+      "manifest_sha256": "03e32cbe800429a74590a697cca23f5a55f69571a3f4607934792fe177ae682a",
+      "binary_sha256": "a642e43ab8a285da5ed95d150d4787db87d900406a4fc3a26402bf9812c97bfe",
+      "local_path": "cli/assets/webp-convert-1.0.0-universal2-apple-darwin.zip",
+      "local_manifest": "manifests/webp-convert-1.0.0-universal2-apple-darwin-20261121.manifest.json"
+    }
+  }
+}

@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+"""Exercise the cs.WebP API from an actual host project using free tool4d.
+
+Port of the audited quickdraw host runner, adapted to the webp component:
+contract assertions live in tests/host/contract.json and describe the
+plain-text --version / JSON-protocol-1 wire contract of webp-convert 1.0.x.
+"""
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import uuid
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from common import PipelineError, no_symlinks, read_json_file
+
+HOST_STATUS = "host-status.json"
+
+
+def _pointer(value, path):
+    if not isinstance(path, str) or (path and not path.startswith("/")):
+        raise ValueError("contract paths must be JSON pointers")
+    for token in path.split("/")[1:] if path else []:
+        token = token.replace("~1", "/").replace("~0", "~")
+        if isinstance(value, dict) and token in value:
+            value = value[token]
+        elif isinstance(value, list) and token.isdigit() and int(token) < len(value):
+            value = value[int(token)]
+        else:
+            raise ValueError("missing host contract path: " + path)
+    return value
+
+
+def _equal(actual, expected):
+    if type(actual) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return actual.keys() == expected.keys() and all(
+            _equal(actual[key], value) for key, value in expected.items())
+    if isinstance(expected, list):
+        return len(actual) == len(expected) and all(
+            _equal(a, b) for a, b in zip(actual, expected))
+    return actual == expected
+
+
+def _assertions(value, assertions):
+    if not isinstance(assertions, list):
+        raise ValueError("contract assertions must be an array")
+    for assertion in assertions:
+        if not isinstance(assertion, dict) or "path" not in assertion or not (
+                set(assertion) & {"equals", "length", "each", "absent", "matches"}):
+            raise ValueError("invalid host contract assertion")
+        if set(assertion) - {"path", "equals", "length", "each", "absent", "matches"}:
+            raise ValueError("unknown host contract assertion field")
+        path = assertion["path"]
+        if "absent" in assertion:
+            if not isinstance(assertion["absent"], bool) or set(assertion) != {"path", "absent"}:
+                raise ValueError("absent assertions require only path and absent:true")
+            if assertion["absent"] is False:
+                # presence assertion: the path must resolve
+                _pointer(value, path)
+                continue
+            try:
+                _pointer(value, path)
+            except ValueError as error:
+                if str(error).startswith("missing host contract path:"):
+                    continue
+                raise
+            raise ValueError("host contract path must be absent: " + path)
+        actual = _pointer(value, path)
+        if "equals" in assertion and not _equal(actual, assertion["equals"]):
+            raise ValueError("host contract value mismatch: " + path
+                             + ": " + json.dumps(_pointer(value, path), ensure_ascii=False)[:400])
+        if "matches" in assertion:
+            pattern = assertion["matches"]
+            if not isinstance(actual, str) or not isinstance(pattern, str) or not pattern:
+                raise ValueError("host matches assertion requires Text and a nonempty pattern")
+            try:
+                matched = re.fullmatch(pattern, actual)
+            except re.error as error:
+                raise ValueError("invalid host contract regex: " + str(error)) from error
+            if matched is None:
+                raise ValueError("host contract pattern mismatch: " + path
+                                 + ": " + repr(actual)[:200])
+        if "length" in assertion:
+            length = assertion["length"]
+            if type(length) is not int or length < 0 or not isinstance(actual, list) or len(actual) != length:
+                raise ValueError("host contract array length mismatch: " + path
+                                 + " (got " + str(len(actual)) + " of " + str(length) + ")")
+        if "each" in assertion:
+            if not isinstance(actual, list) or not actual or not assertion["each"]:
+                raise ValueError("host contract each requires a nonempty array: " + path)
+            for entry in actual:
+                _assertions(entry, assertion["each"])
+
+
+def _success_result(result, feature=False):
+    if not isinstance(result, dict) or result.get("ok") is not True:
+        raise ValueError("host success result must have ok:true")
+    if (not isinstance(result.get("stdout"), str) or result["stdout"] == ""
+            or not isinstance(result.get("stderr"), str)
+            or type(result.get("exitCode")) is not int or result["exitCode"] != 0):
+        raise ValueError("host success result requires nonempty stdout, stderr and exitCode:0")
+    if "error" in result:
+        raise ValueError("host success result must not contain an error")
+    if feature and ("value" not in result or result["value"] is None):
+        raise ValueError("host feature success result requires a value")
+
+
+def validate_status(status, contract, expect_compiled):
+    if (not isinstance(status, dict) or status.get("success") is not True
+            or status.get("finished") is not True
+            or status.get("compiled") is not expect_compiled):
+        raise ValueError("4D host requires success:true, finished:true and exact compiled mode; got "
+                         + json.dumps({key: status.get(key) for key in ("success", "finished", "compiled", "phase")})
+                         + ("" if "errors" not in status else " errors=" + json.dumps(status["errors"])[:500]))
+    if not isinstance(contract, dict) or type(contract.get("schema")) is not int or contract["schema"] != 1:
+        raise ValueError("unsupported host contract schema")
+    feature = contract.get("feature")
+    execution = contract.get("execution")
+    if not isinstance(feature, dict) or not isinstance(execution, dict):
+        raise ValueError("host contract requires feature and execution sections")
+    cases = _pointer(status, feature.get("casesPath"))
+    expected = feature.get("cases")
+    count = feature.get("caseCount")
+    if expected is not None and count is not None:
+        raise ValueError("choose exact feature cases or semantic caseCount, not both")
+    if expected is None:
+        if type(count) is not int or count <= 0 or not feature.get("caseAssertions"):
+            raise ValueError("semantic feature cases require positive caseCount and nonempty caseAssertions")
+    elif not isinstance(expected, list) or not expected:
+        raise ValueError("host contract requires all nonempty feature cases")
+    if not isinstance(cases, list) or len(cases) != (count if expected is None else len(expected)):
+        raise ValueError("host contract requires all nonempty feature cases")
+    for index, result in enumerate(cases):
+        _success_result(result, feature=True)
+        if expected is None:
+            _assertions(result, feature["caseAssertions"])
+            continue
+        fields = expected[index]
+        if not isinstance(fields, dict) or not {"stdout", "stderr", "exitCode", "value"} <= fields.keys():
+            raise ValueError("feature contract cases require stdout, stderr, exitCode and value")
+        for key, value in fields.items():
+            if key not in result or not _equal(result[key], value):
+                raise ValueError("host feature case mismatch: " + key)
+    paths = execution.get("successPaths")
+    if not isinstance(paths, list):
+        raise ValueError("execution successPaths must be an array")
+    for path in paths:
+        result = _pointer(status, path)
+        _success_result(result)
+        _assertions(result, [{"path": "/value", "absent": False}] if "value" in result
+                    else [{"path": "/ok", "equals": True}])
+    # feature.global assertions are optional for semantic caseCount contracts:
+    # per-case guarantees are already enforced through caseAssertions
+    for section in (feature, execution):
+        assertions = section.get("assertions")
+        if assertions is None and section is not feature:
+            raise ValueError("execution assertions must be a nonempty array")
+        if assertions is None:
+            continue
+        if not isinstance(assertions, list) or not assertions:
+            raise ValueError("feature and execution assertions must be nonempty arrays")
+        _assertions(status, assertions)
+    return status
+
+
+def _read_json(path):
+    return read_json_file(path)
+
+
+def _host_path_prefix(label, windows=None):
+    if windows is None:
+        windows = os.name == "nt"
+    if windows:
+        return label + " 日本語 path"
+    # no double quote in the staging name: the CLI escapes quotes in its
+    # plain-text errormessages, which would break the stderr path round-trip
+    return label + " 日本語 ' quote"
+
+
+def no_symlinks_fixture(path):
+    no_symlinks(path)
+
+
+def test_4d(root, tool4d, component=None):
+    no_symlinks(root, recursive=False)
+    root = Path(root).resolve()
+    contract = _read_json(root / "tests" / "host" / "contract.json")
+    fixture = root / "tests" / "host"
+    source = Path(component).absolute() if component is not None else root / "component" / "webp"
+    if not source.is_dir():
+        raise ValueError("host component must be an existing directory")
+    no_symlinks(fixture)
+    no_symlinks(source)
+    build = root / "build"
+    output = build / HOST_STATUS
+    no_symlinks(build, recursive=False)
+    no_symlinks(output, recursive=False)
+    build.mkdir(exist_ok=True)
+    output.unlink(missing_ok=True)
+    staging = build / (_host_path_prefix("4D host") + " " + uuid.uuid4().hex)
+    staging.mkdir()
+    try:
+        host = staging / "Host"
+        shutil.copytree(fixture, host,
+                        ignore=shutil.ignore_patterns("DerivedData", "userPreferences.*", "Data", "Logs"))
+        package = host / "Components" / "webp.4dbase"
+        ignored = ["userPreferences.*", "Data", "Logs"]
+        if component is None:
+            ignored.append("DerivedData")
+        shutil.copytree(source, package, ignore=shutil.ignore_patterns(*ignored))
+        platform = "Windows" if os.name == "nt" else "macOS"
+        executable_name = "webp-convert" + (".exe" if os.name == "nt" else "")
+        native = package / "Resources/bin" / platform / executable_name
+        if not native.is_file() or native.is_symlink():
+            raise ValueError("host test needs the configured native CLI resource; run stage first")
+        executable = host / (_host_path_prefix("renamed executable") + (".exe" if os.name == "nt" else ""))
+        shutil.copy2(native, executable)
+        executable.chmod(0o755)
+        request = host / (_host_path_prefix("host request") + ".json")
+        staged_output = host / (_host_path_prefix("host status") + ".json")
+        # tool4d's PackageManager resolves component dependencies via this file
+        # (an .4dbase in the project's Components folder alone is not picked up)
+        (host / "environment4d.json").write_text(
+            json.dumps({"dependencies": {"webp": str(package)}}) + "\n", encoding="utf-8")
+        request.write_text(json.dumps({"status": str(staged_output),
+                                       "expectCompiled": component is not None,
+                                       "executable": str(executable)}, ensure_ascii=False) + "\n",
+                           encoding="utf-8")
+        subprocess.run([str(Path(tool4d).resolve()), str(host / "Project" / "Host.4DProject"),
+                        "--skip-onstartup", "--startup-method=Smoke", "--dataless",
+                        "--user-param=" + str(request)], check=True, timeout=300)
+        no_symlinks(staged_output, recursive=False)
+        if not staged_output.is_file() or staged_output.is_symlink():
+            raise ValueError("tool4d did not write host-status.json; host execution is unverified")
+        output.write_bytes(staged_output.read_bytes())
+        status = _read_json(output)
+        return validate_status(status, contract, component is not None)
+    finally:
+        shutil.rmtree(staging)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--root", type=Path, default=Path(__file__).resolve().parents[1])
+    parser.add_argument("--tool4d", type=Path, required=True)
+    parser.add_argument("--component", type=Path,
+                        help="load this unpacked .4dbase instead of the source project")
+    args = parser.parse_args()
+    try:
+        test_4d(args.root, args.tool4d, args.component)
+    except (ValueError, OSError, subprocess.SubprocessError) as error:
+        print(f"4D host tests failed: {error}", file=sys.stderr)
+        return 1
+    print("4D host contract passed")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

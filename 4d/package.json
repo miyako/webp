@@ -1,0 +1,15 @@
+{
+  "name": "webp",
+  "version": "20.0.0",
+  "private": true,
+  "description": "WebP, PNG, JPEG, GIF, BMP and TIFF conversion and inspection using verified external webp-convert assets",
+  "license": "MIT",
+  "tool": {
+    "platform": "macos",
+    "branch": "21R4",
+    "version": "21R4",
+    "build": "100224",
+    "arch": "arm",
+    "sha256": "PENDING_LOCAL_TOOL4D"
+  }
+}

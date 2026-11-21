@@ -1,0 +1,1183 @@
+{
+  "manifest_schema": "webp-convert-release-manifest/1",
+  "cli_version": "1.0.0",
+  "commit": "93259beab1802828980468d933eadba44bd8df62",
+  "commit_status": "clean",
+  "target": "universal2-apple-darwin",
+  "toolchain": {
+    "rustc": "1.100.0 (0ef1bc386 2026-11-09)",
+    "pinned_channel": "1.100.0"
+  },
+  "build_date_utc": "2026-11-21T05:21:16Z",
+  "binary": {
+    "path": "target/universal/webp-convert",
+    "sha256": "a642e43ab8a285da5ed95d150d4787db87d900406a4fc3a26402bf9812c97bfe",
+    "size_bytes": 7291152
+  },
+  "capabilities_report": {
+    "protocol": 1,
+    "ok": true,
+    "operation": "capabilities",
+    "capabilities": [
+      {
+        "format": "webp",
+        "read": true,
+        "write": true,
+        "animation_read": true,
+        "animation_write": true,
+        "alpha_read": true,
+        "alpha_write": true,
+        "metadata_read": [
+          "icc",
+          "exif",
+          "xmp"
+        ],
+        "metadata_write": [
+          "icc",
+          "exif",
+          "xmp"
+        ],
+        "pages_read": false,
+        "bit_depth_limit": "8-bit RGBA",
+        "backend": "libwebp",
+        "backend_version": "0x010500",
+        "restrictions": [
+          "max encoder dimensions 16383x16383",
+          "lossless is pixel-exact only with exact=1 (engine sets it)",
+          "ICC/EXIF/XMP carried via VP8X/ICCP/EXIF/XMP chunks (write-through)"
+        ]
+      },
+      {
+        "format": "png",
+        "read": true,
+        "write": true,
+        "animation_read": false,
+        "animation_write": false,
+        "alpha_read": true,
+        "alpha_write": true,
+        "metadata_read": [
+          "icc",
+          "exif",
+          "xmp",
+          "comments"
+        ],
+        "metadata_write": [],
+        "pages_read": false,
+        "bit_depth_limit": "8/16-bit normalized to 8-bit on decode",
+        "backend": "image (image-png)",
+        "backend_version": "1.0.0",
+        "restrictions": [
+          "APNG input decodes to its first frame (documented loss)",
+          "16-bit input normalizes to 8-bit (diagnosed)",
+          "input ICC/EXIF/XMP is carried to WebP targets only; PNG writes do not embed metadata"
+        ]
+      },
+      {
+        "format": "jpeg",
+        "read": true,
+        "write": true,
+        "animation_read": false,
+        "animation_write": false,
+        "alpha_read": false,
+        "alpha_write": false,
+        "metadata_read": [
+          "exif",
+          "xmp",
+          "icc",
+          "comments"
+        ],
+        "metadata_write": [],
+        "pages_read": false,
+        "bit_depth_limit": "8-bit RGB(A); CMYK decoded to RGB",
+        "backend": "image (zune-jpeg / jpeg-encoder)",
+        "backend_version": "1.0.0",
+        "restrictions": [
+          "no alpha channel; alpha input requires explicit --background",
+          "quality 0-100 is JPEG-specific; not comparable with WebP quality",
+          "progressive encoding is not configurable in v0"
+        ]
+      },
+      {
+        "format": "gif",
+        "read": true,
+        "write": true,
+        "animation_read": true,
+        "animation_write": true,
+        "alpha_read": true,
+        "alpha_write": true,
+        "metadata_read": [
+          "xmp",
+          "comments"
+        ],
+        "metadata_write": [],
+        "pages_read": false,
+        "bit_depth_limit": "8-bit indexed (256 colors), 1-bit alpha",
+        "backend": "image 0.25 + gif 0.14",
+        "backend_version": "1.0.0",
+        "restrictions": [
+          "256-color palette; RGBA stills are quantized (diagnosed)",
+          "only binary (1-bit) transparency; partial alpha is lost by the format (diagnosed)",
+          "timing quantizes to 1/100 s units; delays under 10 ms become one unit",
+          "animated output loops infinitely (input loop count is not exposed by the decoder)"
+        ]
+      },
+      {
+        "format": "tiff",
+        "read": true,
+        "write": true,
+        "animation_read": false,
+        "animation_write": false,
+        "alpha_read": true,
+        "alpha_write": true,
+        "metadata_read": [
+          "exif",
+          "icc",
+          "comments"
+        ],
+        "metadata_write": [],
+        "pages_read": true,
+        "bit_depth_limit": "8/16-bit normalized to 8-bit on decode",
+        "backend": "image (tiff crate)",
+        "backend_version": "1.0.0",
+        "restrictions": [
+          "multi-page input requires --page N (never silently truncated)",
+          "16-bit input normalizes to 8-bit with a diagnostic",
+          "CMYK pages convert with a naive 1-minus mapping (no ICC profile math)",
+          "exotic compressions may decode to corrupt_input with a clear message"
+        ]
+      },
+      {
+        "format": "bmp",
+        "read": true,
+        "write": true,
+        "animation_read": false,
+        "animation_write": false,
+        "alpha_read": false,
+        "alpha_write": false,
+        "metadata_read": [],
+        "metadata_write": [],
+        "pages_read": false,
+        "bit_depth_limit": "1/4/8/24/32-bit decoded; 24-bit written",
+        "backend": "image 0.25 (bmp)",
+        "backend_version": "1.0.0",
+        "restrictions": [
+          "alpha input requires explicit --background before encode",
+          "top-down BMPs may decode to vertically mirrored pixels in the wild"
+        ]
+      }
+    ]
+  },
+  "capabilities_report_sha256": "1fd8717baefab9b41da9057938239fc0db2c8200eff176ad5ffe08d2fec9d4ea",
+  "dependency_inventory": [
+    {
+      "name": "adler2",
+      "version": "2.0.1",
+      "external": true
+    },
+    {
+      "name": "aho-corasick",
+      "version": "1.1.5",
+      "external": true
+    },
+    {
+      "name": "anstream",
+      "version": "1.0.0",
+      "external": true
+    },
+    {
+      "name": "anstyle",
+      "version": "1.0.14",
+      "external": true
+    },
+    {
+      "name": "anstyle-parse",
+      "version": "1.0.0",
+      "external": true
+    },
+    {
+      "name": "anstyle-query",
+      "version": "1.1.5",
+      "external": true
+    },
+    {
+      "name": "anstyle-wincon",
+      "version": "3.0.11",
+      "external": true
+    },
+    {
+      "name": "assert_cmd",
+      "version": "2.2.2",
+      "external": true
+    },
+    {
+      "name": "autocfg",
+      "version": "1.5.1",
+      "external": true
+    },
+    {
+      "name": "bitflags",
+      "version": "2.13.2",
+      "external": true
+    },
+    {
+      "name": "bstr",
+      "version": "1.14.0",
+      "external": true
+    },
+    {
+      "name": "bytemuck",
+      "version": "1.25.2",
+      "external": true
+    },
+    {
+      "name": "byteorder-lite",
+      "version": "0.1.0",
+      "external": true
+    },
+    {
+      "name": "cc",
+      "version": "1.11.3",
+      "external": true
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.5",
+      "external": true
+    },
+    {
+      "name": "clap",
+      "version": "4.6.9",
+      "external": true
+    },
+    {
+      "name": "clap_builder",
+      "version": "4.6.7",
+      "external": true
+    },
+    {
+      "name": "clap_derive",
+      "version": "4.6.9",
+      "external": true
+    },
+    {
+      "name": "clap_lex",
+      "version": "1.1.2",
+      "external": true
+    },
+    {
+      "name": "color_quant",
+      "version": "1.1.0",
+      "external": true
+    },
+    {
+      "name": "colorchoice",
+      "version": "1.0.5",
+      "external": true
+    },
+    {
+      "name": "crc32fast",
+      "version": "1.5.5",
+      "external": true
+    },
+    {
+      "name": "crunchy",
+      "version": "0.2.4",
+      "external": true
+    },
+    {
+      "name": "difflib",
+      "version": "0.4.0",
+      "external": true
+    },
+    {
+      "name": "errno",
+      "version": "0.3.15",
+      "external": true
+    },
+    {
+      "name": "fastrand",
+      "version": "2.5.0",
+      "external": true
+    },
+    {
+      "name": "fax",
+      "version": "0.2.7",
+      "external": true
+    },
+    {
+      "name": "fdeflate",
+      "version": "0.3.7",
+      "external": true
+    },
+    {
+      "name": "find-msvc-tools",
+      "version": "0.1.15",
+      "external": true
+    },
+    {
+      "name": "flate2",
+      "version": "1.1.11",
+      "external": true
+    },
+    {
+      "name": "float-cmp",
+      "version": "0.10.0",
+      "external": true
+    },
+    {
+      "name": "getrandom",
+      "version": "0.4.3",
+      "external": true
+    },
+    {
+      "name": "gif",
+      "version": "0.14.2",
+      "external": true
+    },
+    {
+      "name": "half",
+      "version": "2.7.1",
+      "external": true
+    },
+    {
+      "name": "heck",
+      "version": "0.5.0",
+      "external": true
+    },
+    {
+      "name": "image",
+      "version": "0.25.10",
+      "external": true
+    },
+    {
+      "name": "image-webp",
+      "version": "0.2.4",
+      "external": true
+    },
+    {
+      "name": "is_terminal_polyfill",
+      "version": "1.70.2",
+      "external": true
+    },
+    {
+      "name": "itoa",
+      "version": "1.0.19",
+      "external": true
+    },
+    {
+      "name": "kamadak-exif",
+      "version": "0.6.2",
+      "external": true
+    },
+    {
+      "name": "libc",
+      "version": "0.2.191",
+      "external": true
+    },
+    {
+      "name": "libwebp-sys2",
+      "version": "0.1.11",
+      "external": true
+    },
+    {
+      "name": "libwebp-sys2",
+      "version": "0.2.0",
+      "external": true
+    },
+    {
+      "name": "linux-raw-sys",
+      "version": "0.12.1",
+      "external": true
+    },
+    {
+      "name": "log",
+      "version": "0.4.35",
+      "external": true
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.3",
+      "external": true
+    },
+    {
+      "name": "miniz_oxide",
+      "version": "0.8.9",
+      "external": true
+    },
+    {
+      "name": "miniz_oxide",
+      "version": "0.9.1",
+      "external": true
+    },
+    {
+      "name": "moxcms",
+      "version": "0.8.1",
+      "external": true
+    },
+    {
+      "name": "mutate_once",
+      "version": "0.1.2",
+      "external": true
+    },
+    {
+      "name": "normalize-line-endings",
+      "version": "0.3.0",
+      "external": true
+    },
+    {
+      "name": "num-traits",
+      "version": "0.2.19",
+      "external": true
+    },
+    {
+      "name": "once_cell",
+      "version": "1.21.4",
+      "external": true
+    },
+    {
+      "name": "once_cell_polyfill",
+      "version": "1.70.2",
+      "external": true
+    },
+    {
+      "name": "pkg-config",
+      "version": "0.3.34",
+      "external": true
+    },
+    {
+      "name": "png",
+      "version": "0.18.1",
+      "external": true
+    },
+    {
+      "name": "predicates",
+      "version": "3.1.4",
+      "external": true
+    },
+    {
+      "name": "predicates-core",
+      "version": "1.0.10",
+      "external": true
+    },
+    {
+      "name": "predicates-tree",
+      "version": "1.0.13",
+      "external": true
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107",
+      "external": true
+    },
+    {
+      "name": "pxfm",
+      "version": "0.1.30",
+      "external": true
+    },
+    {
+      "name": "quick-error",
+      "version": "2.0.1",
+      "external": true
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47",
+      "external": true
+    },
+    {
+      "name": "r-efi",
+      "version": "6.0.0",
+      "external": true
+    },
+    {
+      "name": "regex",
+      "version": "1.13.2",
+      "external": true
+    },
+    {
+      "name": "regex-automata",
+      "version": "0.4.19",
+      "external": true
+    },
+    {
+      "name": "regex-syntax",
+      "version": "0.8.12",
+      "external": true
+    },
+    {
+      "name": "rustix",
+      "version": "1.1.6",
+      "external": true
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229",
+      "external": true
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.229",
+      "external": true
+    },
+    {
+      "name": "serde_derive",
+      "version": "1.0.229",
+      "external": true
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.154",
+      "external": true
+    },
+    {
+      "name": "shlex",
+      "version": "2.0.1",
+      "external": true
+    },
+    {
+      "name": "simd-adler32",
+      "version": "0.3.10",
+      "external": true
+    },
+    {
+      "name": "strsim",
+      "version": "0.11.1",
+      "external": true
+    },
+    {
+      "name": "syn",
+      "version": "2.0.119",
+      "external": true
+    },
+    {
+      "name": "syn",
+      "version": "3.0.10",
+      "external": true
+    },
+    {
+      "name": "tempfile",
+      "version": "3.27.0",
+      "external": true
+    },
+    {
+      "name": "termtree",
+      "version": "0.5.1",
+      "external": true
+    },
+    {
+      "name": "thiserror",
+      "version": "2.0.21",
+      "external": true
+    },
+    {
+      "name": "thiserror-impl",
+      "version": "2.0.21",
+      "external": true
+    },
+    {
+      "name": "tiff",
+      "version": "0.11.3",
+      "external": true
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27",
+      "external": true
+    },
+    {
+      "name": "utf8parse",
+      "version": "0.2.2",
+      "external": true
+    },
+    {
+      "name": "vcpkg",
+      "version": "0.2.15",
+      "external": true
+    },
+    {
+      "name": "wait-timeout",
+      "version": "0.2.1",
+      "external": true
+    },
+    {
+      "name": "webp-animation",
+      "version": "0.10.0",
+      "external": true
+    },
+    {
+      "name": "webp-convert",
+      "version": "1.0.0",
+      "external": false
+    },
+    {
+      "name": "webp-convert-codec-bmp",
+      "version": "1.0.0",
+      "external": false
+    },
+    {
+      "name": "webp-convert-codec-gif",
+      "version": "1.0.0",
+      "external": false
+    },
+    {
+      "name": "webp-convert-codec-jpeg",
+      "version": "1.0.0",
+      "external": false
+    },
+    {
+      "name": "webp-convert-codec-png",
+      "version": "1.0.0",
+      "external": false
+    },
+    {
+      "name": "webp-convert-codec-tiff",
+      "version": "1.0.0",
+      "external": false
+    },
+    {
+      "name": "webp-convert-codec-webp",
+      "version": "1.0.0",
+      "external": false
+    },
+    {
+      "name": "webp-convert-core",
+      "version": "1.0.0",
+      "external": false
+    },
+    {
+      "name": "weezl",
+      "version": "0.1.12",
+      "external": true
+    },
+    {
+      "name": "windows-link",
+      "version": "0.2.1",
+      "external": true
+    },
+    {
+      "name": "windows-sys",
+      "version": "0.61.2",
+      "external": true
+    },
+    {
+      "name": "zerocopy",
+      "version": "0.8.63",
+      "external": true
+    },
+    {
+      "name": "zerocopy-derive",
+      "version": "0.8.63",
+      "external": true
+    },
+    {
+      "name": "zlib-rs",
+      "version": "0.6.8",
+      "external": true
+    },
+    {
+      "name": "zmij",
+      "version": "1.0.23",
+      "external": true
+    },
+    {
+      "name": "zune-core",
+      "version": "0.5.3",
+      "external": true
+    },
+    {
+      "name": "zune-jpeg",
+      "version": "0.5.15",
+      "external": true
+    }
+  ],
+  "license_inventory": [
+    {
+      "name": "adler2",
+      "version": "2.0.1",
+      "license": "0BSD OR MIT OR Apache-2.0"
+    },
+    {
+      "name": "aho-corasick",
+      "version": "1.1.5",
+      "license": "Unlicense OR MIT"
+    },
+    {
+      "name": "anstream",
+      "version": "1.0.0",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstyle",
+      "version": "1.0.14",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstyle-parse",
+      "version": "1.0.0",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstyle-query",
+      "version": "1.1.5",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "anstyle-wincon",
+      "version": "3.0.11",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "assert_cmd",
+      "version": "2.2.2",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "autocfg",
+      "version": "1.5.1",
+      "license": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "bitflags",
+      "version": "2.13.2",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "bstr",
+      "version": "1.14.0",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "bytemuck",
+      "version": "1.25.2",
+      "license": "Zlib OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "byteorder-lite",
+      "version": "0.1.0",
+      "license": "Unlicense OR MIT"
+    },
+    {
+      "name": "cc",
+      "version": "1.11.3",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "cfg-if",
+      "version": "1.0.5",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "clap",
+      "version": "4.6.9",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "clap_builder",
+      "version": "4.6.7",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "clap_derive",
+      "version": "4.6.9",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "clap_lex",
+      "version": "1.1.2",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "color_quant",
+      "version": "1.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "colorchoice",
+      "version": "1.0.5",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "crc32fast",
+      "version": "1.5.5",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "crunchy",
+      "version": "0.2.4",
+      "license": "MIT"
+    },
+    {
+      "name": "difflib",
+      "version": "0.4.0",
+      "license": "MIT"
+    },
+    {
+      "name": "errno",
+      "version": "0.3.15",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "fastrand",
+      "version": "2.5.0",
+      "license": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "fax",
+      "version": "0.2.7",
+      "license": "MIT"
+    },
+    {
+      "name": "fdeflate",
+      "version": "0.3.7",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "find-msvc-tools",
+      "version": "0.1.15",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "flate2",
+      "version": "1.1.11",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "float-cmp",
+      "version": "0.10.0",
+      "license": "MIT"
+    },
+    {
+      "name": "getrandom",
+      "version": "0.4.3",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "gif",
+      "version": "0.14.2",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "half",
+      "version": "2.7.1",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "heck",
+      "version": "0.5.0",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "image",
+      "version": "0.25.10",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "image-webp",
+      "version": "0.2.4",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "is_terminal_polyfill",
+      "version": "1.70.2",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "itoa",
+      "version": "1.0.19",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "kamadak-exif",
+      "version": "0.6.2",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "libc",
+      "version": "0.2.191",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "libwebp-sys2",
+      "version": "0.1.11",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "libwebp-sys2",
+      "version": "0.2.0",
+      "license": "BSD-3-Clause"
+    },
+    {
+      "name": "linux-raw-sys",
+      "version": "0.12.1",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "log",
+      "version": "0.4.35",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "memchr",
+      "version": "2.8.3",
+      "license": "Unlicense OR MIT"
+    },
+    {
+      "name": "miniz_oxide",
+      "version": "0.8.9",
+      "license": "MIT OR Zlib OR Apache-2.0"
+    },
+    {
+      "name": "miniz_oxide",
+      "version": "0.9.1",
+      "license": "MIT OR Zlib OR Apache-2.0"
+    },
+    {
+      "name": "moxcms",
+      "version": "0.8.1",
+      "license": "BSD-3-Clause OR Apache-2.0"
+    },
+    {
+      "name": "mutate_once",
+      "version": "0.1.2",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "normalize-line-endings",
+      "version": "0.3.0",
+      "license": "Apache-2.0"
+    },
+    {
+      "name": "num-traits",
+      "version": "0.2.19",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "once_cell",
+      "version": "1.21.4",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "once_cell_polyfill",
+      "version": "1.70.2",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "pkg-config",
+      "version": "0.3.34",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "png",
+      "version": "0.18.1",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "predicates",
+      "version": "3.1.4",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "predicates-core",
+      "version": "1.0.10",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "predicates-tree",
+      "version": "1.0.13",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "proc-macro2",
+      "version": "1.0.107",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "pxfm",
+      "version": "0.1.30",
+      "license": "BSD-3-Clause OR Apache-2.0"
+    },
+    {
+      "name": "quick-error",
+      "version": "2.0.1",
+      "license": "MIT/Apache-2.0"
+    },
+    {
+      "name": "quote",
+      "version": "1.0.47",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "r-efi",
+      "version": "6.0.0",
+      "license": "MIT OR Apache-2.0 OR LGPL-2.1-or-later"
+    },
+    {
+      "name": "regex",
+      "version": "1.13.2",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "regex-automata",
+      "version": "0.4.19",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "regex-syntax",
+      "version": "0.8.12",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "rustix",
+      "version": "1.1.6",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "serde",
+      "version": "1.0.229",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_core",
+      "version": "1.0.229",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_derive",
+      "version": "1.0.229",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "serde_json",
+      "version": "1.0.154",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "shlex",
+      "version": "2.0.1",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "simd-adler32",
+      "version": "0.3.10",
+      "license": "MIT"
+    },
+    {
+      "name": "strsim",
+      "version": "0.11.1",
+      "license": "MIT"
+    },
+    {
+      "name": "syn",
+      "version": "2.0.119",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "syn",
+      "version": "3.0.10",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "tempfile",
+      "version": "3.27.0",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "termtree",
+      "version": "0.5.1",
+      "license": "MIT"
+    },
+    {
+      "name": "thiserror",
+      "version": "2.0.21",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "thiserror-impl",
+      "version": "2.0.21",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "tiff",
+      "version": "0.11.3",
+      "license": "MIT"
+    },
+    {
+      "name": "unicode-ident",
+      "version": "1.0.27",
+      "license": "(MIT OR Apache-2.0) AND Unicode-3.0"
+    },
+    {
+      "name": "utf8parse",
+      "version": "0.2.2",
+      "license": "Apache-2.0 OR MIT"
+    },
+    {
+      "name": "vcpkg",
+      "version": "0.2.15",
+      "license": "MIT/Apache-2.0"
+    },
+    {
+      "name": "wait-timeout",
+      "version": "0.2.1",
+      "license": "MIT/Apache-2.0"
+    },
+    {
+      "name": "webp-animation",
+      "version": "0.10.0",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "weezl",
+      "version": "0.1.12",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-link",
+      "version": "0.2.1",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "windows-sys",
+      "version": "0.61.2",
+      "license": "MIT OR Apache-2.0"
+    },
+    {
+      "name": "zerocopy",
+      "version": "0.8.63",
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "zerocopy-derive",
+      "version": "0.8.63",
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT"
+    },
+    {
+      "name": "zlib-rs",
+      "version": "0.6.8",
+      "license": "Zlib"
+    },
+    {
+      "name": "zmij",
+      "version": "1.0.23",
+      "license": "MIT"
+    },
+    {
+      "name": "zune-core",
+      "version": "0.5.3",
+      "license": "MIT OR Apache-2.0 OR Zlib"
+    },
+    {
+      "name": "zune-jpeg",
+      "version": "0.5.15",
+      "license": "MIT OR Apache-2.0 OR Zlib"
+    }
+  ],
+  "provenance": {
+    "repository": "https://github.com/miyako/webp",
+    "toolchain_pinned_by": "rust-toolchain.toml",
+    "lockfile": "Cargo.lock committed; cargo metadata run with --locked",
+    "native_vendored_dependencies": [
+      "licensing files shipped in licenses/libwebp/ (see licenses/README.md)"
+    ]
+  }
+}

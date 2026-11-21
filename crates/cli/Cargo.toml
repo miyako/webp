@@ -1,0 +1,29 @@
+[package]
+name = "webp-convert"
+description = "Portable, self-contained image conversion CLI (WebP, PNG, JPEG, GIF, BMP, TIFF)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "webp-convert"
+path = "src/main.rs"
+
+[dependencies]
+webp-convert-core.workspace = true
+webp-convert-codec-webp.workspace = true
+webp-convert-codec-png.workspace = true
+webp-convert-codec-jpeg.workspace = true
+webp-convert-codec-gif.workspace = true
+webp-convert-codec-tiff.workspace = true
+webp-convert-codec-bmp.workspace = true
+image.workspace = true
+serde_json.workspace = true
+serde.workspace = true
+clap.workspace = true
+
+[dev-dependencies]
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"

@@ -61,3 +61,7 @@ jobs:
           BIN=target/release/webp-convert${{ runner.os == 'Windows' && '.exe' || '' }}
           "$BIN" formats
           "$BIN" capabilities --json
+      - name: Conversion tests (run the real decoder/encoder suite natively)
+        shell: bash
+        run: cargo +1.100.0 test -p webp-convert --test matrix --test streams
+          --release

@@ -25,6 +25,8 @@ use webp_convert_core as core;
 /// libwebp hard limits (encoder rejects larger).
 pub const MAX_DIMENSION: u32 = 16_383;
 
+pub mod mux;
+
 pub struct WebpCodec;
 
 impl WebpCodec {
@@ -178,7 +180,8 @@ impl Codec for WebpCodec {
             }
             let out = std::slice::from_raw_parts(writer.mem, writer.size).to_vec();
             libwebp_sys::WebPMemoryWriterClear(&mut writer);
-            Ok(out)
+            // metadata write-through (plan §5.6 / ADR-008)
+            mux::with_metadata(&out, &opts.metadata_out, (w, h), img.has_alpha)
         }
     }
 
@@ -222,7 +225,13 @@ impl Codec for WebpCodec {
         let data = enc
             .finalize(ts)
             .map_err(|e| WcError::Internal(format!("webp animation finalize: {e}")))?;
-        Ok(data.to_vec())
+        let any_alpha = anim.frames.iter().any(|f| f.still.has_alpha);
+        mux::with_metadata(
+            &data,
+            &opts.metadata_out,
+            (anim.width, anim.height),
+            any_alpha,
+        )
     }
 
     fn caps(&self) -> FormatCaps {
@@ -236,7 +245,7 @@ impl Codec for WebpCodec {
             alpha_read: true,
             alpha_write: true,
             metadata_read: vec!["icc".into(), "exif".into(), "xmp".into()],
-            metadata_write: vec![], // P1
+            metadata_write: vec!["icc".into(), "exif".into(), "xmp".into()],
             pages_read: false,
             bit_depth_limit: "8-bit RGBA".into(),
             backend: "libwebp".into(),
@@ -244,7 +253,7 @@ impl Codec for WebpCodec {
             restrictions: vec![
                 "max encoder dimensions 16383x16383".into(),
                 "lossless is pixel-exact only with exact=1 (engine sets it)".into(),
-                "ICP/EXIF/XMP chunks are not copied to output in v0".into(),
+                "ICC/EXIF/XMP carried via VP8X/ICCP/EXIF/XMP chunks (write-through)".into(),
             ],
         }
     }

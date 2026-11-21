@@ -39,6 +39,9 @@ impl Diagnostic {
 pub mod codes {
     pub const EXTENSION_MISMATCH: &str = "extension_mismatch";
     pub const METADATA_DROPPED: &str = "metadata_dropped";
+    pub const METADATA_CARRIED: &str = "metadata_carried";
+    pub const METADATA_STRIPPED: &str = "metadata_stripped";
+    pub const ORIENTATION_APPLIED: &str = "orientation_applied";
     pub const ALPHA_FLATTENED: &str = "alpha_flattened";
     pub const ALPHA_REDUCED: &str = "alpha_reduced";
     pub const ANIMATION_FLATTENED: &str = "animation_flattened";

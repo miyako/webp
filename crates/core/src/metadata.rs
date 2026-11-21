@@ -54,6 +54,344 @@ pub fn exif_orientation(data: &[u8]) -> Option<u8> {
     u8::try_from(v).ok().filter(|o| (1..=8).contains(o))
 }
 
+/// Raw metadata payloads extracted from a container, ready for
+/// re-embedding into metadata-capable outputs (plan §5.6 write-through).
+/// Extraction is best-effort: a category that cannot be reliably extracted
+/// stays `None` and the caller must keep diagnosing it as dropped.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RawMetadata {
+    /// ICC profile bytes
+    pub icc: Option<Vec<u8>>,
+    /// EXIF payload (TIFF format, no "Exif\0\0" container prefix)
+    pub exif: Option<Vec<u8>>,
+    /// XMP packet (raw RDF/XML)
+    pub xmp: Option<Vec<u8>>,
+}
+
+impl RawMetadata {
+    pub fn any(&self) -> bool {
+        self.icc.is_some() || self.exif.is_some() || self.xmp.is_some()
+    }
+
+    /// Names of carried categories, for diagnostics.
+    pub fn names(&self) -> Vec<&'static str> {
+        let mut v = Vec::new();
+        if self.icc.is_some() {
+            v.push("ICC");
+        }
+        if self.exif.is_some() {
+            v.push("EXIF");
+        }
+        if self.xmp.is_some() {
+            v.push("XMP");
+        }
+        v
+    }
+}
+
+fn inflate_nul(expected_size: Option<usize>, mut data: &[u8]) -> Option<Vec<u8>> {
+    use std::io::Read;
+    let mut out = Vec::new();
+    flate2::read::ZlibDecoder::new(&mut data)
+        .read_to_end(&mut out)
+        .ok()?;
+    match expected_size {
+        Some(n) => (out.len() == n).then_some(out),
+        None => Some(out),
+    }
+}
+
+/// Extract raw metadata payloads from the input container (plan §5.6).
+/// JPEG/PNG/WebP/TIFF inputs are supported; GIF/BMP containers carry none
+/// of these categories.
+pub fn extract(data: &[u8], format: ImageFormat) -> RawMetadata {
+    match format {
+        ImageFormat::Jpeg => extract_jpeg(data),
+        ImageFormat::Png => extract_png(data),
+        ImageFormat::WebP => extract_riff_webp(data),
+        ImageFormat::Tiff => extract_tiff(data),
+        ImageFormat::Gif | ImageFormat::Bmp => RawMetadata::default(),
+    }
+}
+
+/// JPEG: APP1 "Exif\0\0" -> EXIF; APP1 with the XAP namespace marker ->
+/// XMP; APP2 "ICC_PROFILE\0" chunk family -> concatenated ICC profile.
+fn extract_jpeg(data: &[u8]) -> RawMetadata {
+    let mut md = RawMetadata::default();
+    if !data.starts_with(&[0xFF, 0xD8]) {
+        return md;
+    }
+    let mut icc_chunks: Vec<(usize, &[u8])> = Vec::new();
+    let mut icc_total = 0usize;
+    let mut i = 2usize;
+    while i + 4 <= data.len() {
+        if data[i] != 0xFF {
+            break;
+        }
+        let marker = data[i + 1];
+        match marker {
+            0xD8 | 0x01 | (0xD0..=0xD7) => i += 2,
+            0xD9 => break,
+            _ => {
+                if i + 4 > data.len() {
+                    break;
+                }
+                let len = u16::from_be_bytes([data[i + 2], data[i + 3]]) as usize;
+                if len < 2 || i + 2 + len > data.len() {
+                    break;
+                }
+                let seg = &data[i + 4..i + 2 + len];
+                match marker {
+                    0xE1 => {
+                        if let Some(rest) = seg.strip_prefix(b"Exif\0\0") {
+                            md.exif = Some(rest.to_vec());
+                        } else if let Some(rest) =
+                            seg.strip_prefix(b"http://ns.adobe.com/xap/1.0/\0")
+                        {
+                            md.xmp = Some(rest.to_vec());
+                        }
+                    }
+                    0xE2 => {
+                        // ICC_PROFILE\0 <seq-no> <count> <bytes...>
+                        if seg.len() > 14 && seg.starts_with(b"ICC_PROFILE\0") {
+                            let seq = seg[12] as usize;
+                            let total = seg[13].max(1) as usize;
+                            icc_total = icc_total.max(total);
+                            if (1..=icc_total).contains(&seq)
+                                && icc_chunks.iter().all(|(n, _)| *n != seq)
+                            {
+                                icc_chunks.push((seq, &seg[14..]));
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+                i += 2 + len;
+            }
+        }
+    }
+    if !icc_chunks.is_empty() {
+        icc_chunks.sort_by_key(|(n, _)| *n);
+        let seqs: Vec<usize> = icc_chunks.iter().map(|(n, _)| *n).collect();
+        let complete =
+            (1..=icc_chunks.len()).all(|k| seqs.contains(&k)) && icc_total == icc_chunks.len();
+        if complete {
+            md.icc = Some(
+                icc_chunks
+                    .into_iter()
+                    .flat_map(|(_, b)| b.to_vec())
+                    .collect(),
+            );
+        }
+        // incomplete ICC families stay None: partial profiles are lossy
+    }
+    md
+}
+
+/// PNG: iCCP (inflated) -> ICC; eXIf -> EXIF; iTXt keyword
+/// "XML:com.adobe.xmp" -> XMP.
+fn extract_png(data: &[u8]) -> RawMetadata {
+    let mut md = RawMetadata::default();
+    if data.get(..8) != Some(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A][..]) {
+        return md;
+    }
+    let mut i = 8usize;
+    while i + 8 <= data.len() {
+        let len = u32::from_be_bytes(data[i..i + 4].try_into().unwrap()) as usize;
+        let ctype = &data[i + 4..i + 8];
+        let body_start = i + 8;
+        if body_start + len + 4 > data.len() {
+            break;
+        }
+        let body = &data[body_start..body_start + len];
+        match ctype {
+            b"iCCP" => {
+                // keyword\0 compression-method(0) deflate-data
+                if let Some(nul) = body.iter().position(|&b| b == 0) {
+                    let rest = &body[nul + 1..];
+                    if rest.len() > 1 && rest[0] == 0 {
+                        md.icc = inflate_nul(None, &rest[1..]);
+                    }
+                }
+            }
+            b"eXIf" => md.exif = Some(body.to_vec()),
+            b"iTXt" => {
+                // keyword\0 compression-flag compression-method
+                // language\0 translated\0 text
+                if let Some(knul) = body.iter().position(|&b| b == 0) {
+                    let keyword = &body[..knul];
+                    if keyword == b"XML:com.adobe.xmp" && body.len() > knul + 3 {
+                        let flag = body[knul + 1];
+                        let rest = &body[knul + 3..];
+                        // skip language\0 translated\0
+                        if let Some(l1) = rest.iter().position(|&b| b == 0) {
+                            let after_lang = &rest[l1 + 1..];
+                            if let Some(l2) = after_lang.iter().position(|&b| b == 0) {
+                                let text = &after_lang[l2 + 1..];
+                                if flag == 0 {
+                                    md.xmp = Some(text.to_vec());
+                                } else {
+                                    md.xmp = inflate_nul(None, text);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+        i = body_start + len + 4;
+        if ctype == b"IEND" {
+            break;
+        }
+    }
+    md
+}
+
+/// WebP (RIFF "WEBP"): ICCP / EXIF / XMP chunks; the EXIF chunk may carry
+/// an optional 4-byte LE size prefix (WebP container spec).
+fn extract_riff_webp(data: &[u8]) -> RawMetadata {
+    let mut md = RawMetadata::default();
+    if data.len() < 12 || &data[..4] != b"RIFF" || &data[8..12] != b"WEBP" {
+        return md;
+    }
+    let mut i = 12usize;
+    while i + 8 <= data.len() {
+        let ctype = &data[i..i + 4];
+        let len = u32::from_le_bytes(data[i + 4..i + 8].try_into().unwrap()) as usize;
+        let body_start = i + 8;
+        if body_start + len > data.len() {
+            break;
+        }
+        let body = &data[body_start..body_start + len];
+        match ctype {
+            b"ICCP" => md.icc = Some(body.to_vec()),
+            b"EXIF" => {
+                // optional 4-byte size prefix
+                let without_prefix = if body.len() >= 4 {
+                    u32::from_le_bytes(body[..4].try_into().unwrap()) as usize == body.len() - 4
+                } else {
+                    false
+                };
+                md.exif = Some(if without_prefix {
+                    body[4..].to_vec()
+                } else {
+                    body.to_vec()
+                });
+            }
+            b"XMP " => md.xmp = Some(body.to_vec()),
+            _ => {}
+        }
+        i += 8 + len + (len & 1);
+    }
+    md
+}
+
+/// Walk a TIFF IFD and return the raw bytes of a typed tag (for UNDEFINED /
+/// BYTE-typed metadata tags such as ICC at 0x8773 / XMP at 0x02BC).
+fn tiff_tag_bytes(data: &[u8], want: u16) -> Option<Vec<u8>> {
+    let le = data.starts_with(b"II");
+    if !(le || data.starts_with(b"MM")) {
+        return None;
+    }
+    let rd16 = |o: usize| -> Option<u16> {
+        let b: [u8; 2] = data.get(o..o + 2)?.try_into().ok()?;
+        Some(if le {
+            u16::from_le_bytes(b)
+        } else {
+            u16::from_be_bytes(b)
+        })
+    };
+    let rd32 = |o: usize| -> Option<u32> {
+        let b: [u8; 4] = data.get(o..o + 4)?.try_into().ok()?;
+        Some(if le {
+            u32::from_le_bytes(b)
+        } else {
+            u32::from_be_bytes(b)
+        })
+    };
+    let ifd0 = rd32(4)? as usize;
+    let n = rd16(ifd0)? as usize;
+    for e in 0..n {
+        let entry = ifd0 + 2 + e * 12;
+        if entry + 12 > data.len() {
+            return None;
+        }
+        if rd16(entry)? != want {
+            continue;
+        }
+        let typ = rd16(entry + 2)?;
+        let count = rd32(entry + 4)? as usize;
+        // UNDEFINED(7)/BYTE(1): 1 byte per sample
+        if typ != 7 && typ != 1 {
+            return None;
+        }
+        return Some(if count <= 4 {
+            data[entry + 8..entry + 8 + count].to_vec()
+        } else {
+            let off = rd32(entry + 8)? as usize;
+            data.get(off..off + count)?.to_vec()
+        });
+    }
+    None
+}
+
+/// TIFF input: EXIF via the exif crate (`Exif::buf()` is a TIFF-format
+/// payload ready for re-embedding), ICC via tag 0x8773, XMP via tag 0x02BC.
+fn extract_tiff(data: &[u8]) -> RawMetadata {
+    let mut md = RawMetadata::default();
+    let mut cursor = std::io::Cursor::new(data);
+    if let Ok(exif) = exif::Reader::new().read_from_container(&mut cursor) {
+        if exif.fields().next().is_some() {
+            md.exif = Some(exif.buf().to_vec());
+        }
+    }
+    md.icc = tiff_tag_bytes(data, 0x8773);
+    md.xmp = tiff_tag_bytes(data, 0x02BC);
+    md
+}
+
+/// Rewrite the EXIF Orientation (0x0112) value to 1 in a raw EXIF/TIFF
+/// payload. Used when pixels were rotated (`--orient auto`): preserving the
+/// stale orientation value would rotate the image a second time downstream.
+/// Returns `None` when the payload is not a parseable TIFF or contains no
+/// orientation entry (nothing to patch).
+pub fn patch_exif_orientation_to_identity(exif: &[u8]) -> Option<Vec<u8>> {
+    let le = exif.starts_with(b"II");
+    if !(le || exif.starts_with(b"MM")) || exif.len() < 10 {
+        return None;
+    }
+    let rd16 = |o: usize| -> Option<u16> {
+        let b: [u8; 2] = exif.get(o..o + 2)?.try_into().ok()?;
+        Some(if le {
+            u16::from_le_bytes(b)
+        } else {
+            u16::from_be_bytes(b)
+        })
+    };
+    let ifd0 = u32::from_le_bytes(exif[4..8].try_into().ok().unwrap_or([0; 4])) as usize;
+    let ifd0 = if le {
+        ifd0
+    } else {
+        u32::from_be_bytes(exif[4..8].try_into().ok().unwrap_or([0; 4])) as usize
+    };
+    let n = rd16(ifd0)? as usize;
+    let mut out = exif.to_vec();
+    for e in 0..n {
+        let entry = ifd0 + 2 + e * 12;
+        if entry + 12 > out.len() {
+            return None;
+        }
+        if rd16(entry)? == 0x0112 {
+            // SHORT value fits inline: patch the first two value bytes
+            let v: [u8; 2] = [1, 0];
+            out[entry + 8..entry + 10].copy_from_slice(&if le { v } else { [0, 1] });
+            return Some(out);
+        }
+    }
+    None
+}
+
 /// Maximum sample depth (BitsPerSample) of a TIFF container's primary image,
 /// via the `exif` crate. Used to warn when 16-bit input is down-converted to
 /// 8-bit (never silently — plan §5.4). Returns None for non-TIFF payloads or

@@ -12,4 +12,5 @@ serde_json.workspace = true
 thiserror.workspace = true
 image.workspace = true
 kamadak-exif.workspace = true
+flate2.workspace = true
 clap.workspace = true

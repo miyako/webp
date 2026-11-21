@@ -30,6 +30,9 @@ serde_json = "1"
 thiserror = "2"
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "tiff", "bmp"] }
 kamadak-exif = "0.6"
+# zlib inflate for extracting PNG iCCP (compressed) profiles during
+# metadata write-through; rust_backend keeps the build pure-Rust
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 gif = "0.14"
 # direct page-by-page TIFF decode (--page; the image crate exposes no pages)
 tiff = "0.11"

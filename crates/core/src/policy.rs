@@ -66,6 +66,11 @@ pub struct EncodeOptions {
     pub frame: Option<u32>,
     /// explicit animation flattening (P1; refused in v0 with clear error)
     pub flatten: bool,
+    /// raw metadata payloads the policy layer decided to carry into the
+    /// output (write-through, plan §5.6 / ADR-008). Codecs that cannot
+    /// carry metadata must treat a non-empty value as an error, never as
+    /// something to silently drop.
+    pub metadata_out: crate::metadata::RawMetadata,
 }
 
 impl EncodeOptions {
@@ -82,6 +87,7 @@ impl EncodeOptions {
             metadata: MetadataMode::All,
             frame: None,
             flatten: false,
+            metadata_out: crate::metadata::RawMetadata::default(),
         }
     }
 }

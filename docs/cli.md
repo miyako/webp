@@ -49,10 +49,14 @@ explicit instruction:
   `alpha_flattened` diagnostic is emitted.
 - **Multi-page TIFF** requires `--page N` (refused otherwise — never
   silently writing page 0). `--page` and `--frame` cannot be combined.
-- **Metadata** (v0): input ICC/EXIF/XMP/comments are detected (presence
-  probe) and a `metadata_dropped` warning is emitted because no target
-  codec writes metadata through yet. `--metadata none` strips explicitly
-  with an info diagnostic.
+- **Metadata** (v1 write-through for WebP): input ICC/EXIF/XMP are
+  extracted (JPEG/PNG/WebP/TIFF containers) and re-embedded into WebP
+  output via VP8X/ICCP/EXIF/XMP chunks (`metadata_carried` info).
+  Rotating pixels (`--orient auto`) rewrites the carried EXIF orientation
+  to 1 so downstream viewers do not rotate twice. Categories that the
+  target cannot store or that fail extraction produce `metadata_dropped`
+  warnings. `--metadata icc` carries ICC only; `--metadata none` strips
+  explicitly with per-category info diagnostics.
 - **Overwrites** require `--overwrite`; an output path that resolves to the
   input file is always refused. Writes are atomic (temp file + rename).
 - **Lossless honesty**: `--lossless`/`--near-lossless` are WebP-only. The
@@ -162,8 +166,9 @@ webp-convert photo.png - --to webp --json | jq .output.bytes  # to stdout, JSON 
 
 ## Known limitations in v0 (honest list)
 
-- No metadata write-through to any format (ICC/EXIF/XMP chunks are not
-  copied; presence is diagnosed). P1.
+- Metadata write-through exists for WebP targets only (ICC/EXIF/XMP);
+  every other target still drops input metadata with a loud
+  `metadata_dropped` warning. Comments/timestamps are not carried.
 - APNG input decodes to its first frame (documented, diagnosed in caps).
 - 16-bit PNG/TIFF normalize to 8-bit with a diagnostic.
 - CMYK TIFF pages convert with a naive 1-minus mapping (no ICC profile math).

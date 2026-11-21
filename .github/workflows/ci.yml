@@ -64,4 +64,4 @@ jobs:
       - name: Conversion tests (run the real decoder/encoder suite natively)
         shell: bash
         run: cargo +1.100.0 test -p webp-convert --test matrix --test streams
-          --release
+          --test advanced --test metadata --release

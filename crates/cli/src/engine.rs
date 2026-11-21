@@ -286,6 +286,16 @@ fn run_convert(cli: &Cli) -> Result<i32> {
                         "partial alpha values are reduced to 1-bit transparency by GIF",
                     ));
                 }
+                // metadata write-through applies to animated outputs too
+                // (no orientation patch: pixels are not rotated on this route)
+                resolve_metadata_out(
+                    &input.bytes,
+                    codec.format(),
+                    target,
+                    &mut opts,
+                    false,
+                    &mut diags,
+                );
                 Route::Animated(a)
             }
         }
@@ -537,6 +547,7 @@ fn encode_options(cli: &Cli, target: ImageFormat) -> EncodeOptions {
         metadata: cli.metadata,
         frame: cli.frame,
         flatten: cli.flatten,
+        metadata_out: core::metadata::RawMetadata::default(),
     }
 }
 
@@ -624,38 +635,126 @@ fn apply_policy(
         }
     }
 
-    // -- metadata (ADR-008): v0 detects presence and diagnoses drops -------
-    match opts.metadata {
-        MetadataMode::All | MetadataMode::Icc => {
-            let presence = core::metadata::probe(payload, input_format);
-            if opts.metadata == MetadataMode::Icc && !presence.icc {
-                diags.push(Diagnostic::warning(
-                    codes::METADATA_DROPPED,
-                    "--metadata icc was requested but no ICC profile is present",
-                ));
+    // -- metadata (ADR-008 + plan §5.6): per-category write-through with
+    //    loud diagnosis of everything that is not carried -------------------
+    let pixel_orientation_changed = orientation.is_some() && opts.orient == OrientMode::Auto;
+    resolve_metadata_out(
+        payload,
+        input_format,
+        target,
+        opts,
+        pixel_orientation_changed,
+        diags,
+    );
+
+    Ok(())
+}
+
+/// Per-category metadata write-through decision (plan §5.6 / ADR-008):
+/// extract what the input carries, attach what the target can store and the
+/// mode allows, and loudly diagnose every other category — never drop in
+/// silence. Also used for the animated route (no orientation patch there).
+fn resolve_metadata_out(
+    payload: &[u8],
+    input_format: ImageFormat,
+    target: ImageFormat,
+    opts: &mut EncodeOptions,
+    pixel_orientation_changed: bool,
+    diags: &mut Vec<Diagnostic>,
+) {
+    let target_supports = |cat: &str| -> bool {
+        registry::all_codecs()
+            .iter()
+            .find(|c| c.format() == target)
+            .map(|c| c.caps().metadata_write.iter().any(|n| n == cat))
+            .unwrap_or(false)
+    };
+    let presence = core::metadata::probe(payload, input_format);
+    let raw = core::metadata::extract(payload, input_format);
+    if opts.metadata == MetadataMode::Icc && !presence.icc {
+        diags.push(Diagnostic::warning(
+            codes::METADATA_DROPPED,
+            "--metadata icc was requested but no ICC profile is present",
+        ));
+    }
+    let categories = [
+        (presence.icc, raw.icc.clone(), "icc", 0),
+        (presence.exif, raw.exif.clone(), "exif", 1),
+        (presence.xmp, raw.xmp.clone(), "xmp", 2),
+    ];
+    let mut carried: Vec<&str> = Vec::new();
+    for (is_present, bytes, cat, slot) in categories {
+        if !is_present {
+            continue;
+        }
+        let allowed = match opts.metadata {
+            MetadataMode::All => true,
+            MetadataMode::Icc => cat == "icc",
+            MetadataMode::None => false,
+        };
+        if !allowed {
+            diags.push(Diagnostic::info(
+                codes::METADATA_STRIPPED,
+                format!(
+                    "{cat} metadata stripped as requested (--metadata {})",
+                    opts.metadata.as_str()
+                ),
+            ));
+            continue;
+        }
+        match bytes {
+            Some(bytes) if target_supports(cat) => {
+                // rotating pixels must not leave a stale orientation tag:
+                // downstream viewers would rotate the image a second time
+                let bytes = if pixel_orientation_changed && cat == "exif" {
+                    match core::metadata::patch_exif_orientation_to_identity(&bytes) {
+                        Some(patched) => patched,
+                        None => {
+                            diags.push(Diagnostic::warning(
+                                codes::METADATA_DROPPED,
+                                "EXIF orientation could not be rewritten after rotating \
+                                 pixels; EXIF dropped to avoid double rotation",
+                            ));
+                            continue;
+                        }
+                    }
+                } else {
+                    bytes
+                };
+                match slot {
+                    0 => opts.metadata_out.icc = Some(bytes),
+                    1 => opts.metadata_out.exif = Some(bytes),
+                    _ => opts.metadata_out.xmp = Some(bytes),
+                }
+                carried.push(cat);
             }
-            if presence.any() {
+            Some(_) => {
                 diags.push(Diagnostic::warning(
                     codes::METADATA_DROPPED,
                     format!(
-                        "input carries {} metadata; writing metadata to the output is not \
-                         supported in this build, so it will be dropped",
-                        presence.names().join(", ")
+                        "input carries {cat} metadata but the {cat} payload could not be \
+                         extracted or {} cannot store it, so it will be dropped",
+                        target.as_str()
+                    ),
+                ));
+            }
+            None => {
+                diags.push(Diagnostic::warning(
+                    codes::METADATA_DROPPED,
+                    format!(
+                        "input carries {cat} metadata but {cat} extraction failed; \
+                         it will be dropped (no partial/stale metadata is ever written)"
                     ),
                 ));
             }
         }
-        MetadataMode::None => {
-            if core::metadata::probe(payload, input_format).any() {
-                diags.push(Diagnostic::info(
-                    "metadata_stripped",
-                    "metadata stripped as requested (--metadata none)",
-                ));
-            }
-        }
     }
-
-    Ok(())
+    if !carried.is_empty() {
+        diags.push(Diagnostic::info(
+            codes::METADATA_CARRIED,
+            format!("metadata carried to output: {}", carried.join(", ")),
+        ));
+    }
 }
 
 fn cli_lossy(_opts: &EncodeOptions) -> bool {

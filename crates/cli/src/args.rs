@@ -27,11 +27,11 @@ pub struct Cli {
     pub command: Option<Command>,
 
     /// Explicit input file or `-`
-    #[arg(short = 'i', long, value_name = "FILE")]
+    #[arg(short = 'i', long = "input", value_name = "FILE")]
     pub input_opt: Option<String>,
 
     /// Explicit output file or `-`
-    #[arg(short = 'o', long, value_name = "FILE")]
+    #[arg(short = 'o', long = "output", value_name = "FILE")]
     pub output_opt: Option<String>,
 
     /// Explicit input format

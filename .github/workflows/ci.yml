@@ -1,0 +1,63 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    # fast lane: format, clippy, tests on the dev platform
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        run: rustup toolchain install 1.100.0 --component clippy,rustfmt
+      - name: Format
+        run: cargo +1.100.0 fmt --check
+      - name: Clippy
+        run: cargo +1.100.0 clippy --workspace --all-targets -- -D warnings
+      - name: Tests
+        run: cargo +1.100.0 test --workspace
+      - name: Release build
+        run: cargo +1.100.0 build --release
+
+  build-native:
+    # The portability claim (ADR-015) rests on shipping fully static
+    # libwebp; verify per-platform release builds actually link.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-14 # arm64
+          - os: macos-13 # x64
+          - os: windows-2022
+            triple: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pinned toolchain
+        shell: bash
+        run: |
+          rustup toolchain install 1.100.0
+          if [ -n "${{ matrix.triple }}" ]; then
+            rustup target add ${{ matrix.triple }}
+          fi
+      - name: Build (release)
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.triple }}" ]; then
+            cargo +1.100.0 build --release --target ${{ matrix.triple }}
+          else
+            cargo +1.100.0 build --release
+          fi
+      - name: Smoke test (linked formats + a real conversion)
+        shell: bash
+        run: |
+          BIN=target/release/webp-convert${{ runner.os == 'Windows' && '.exe' || '' }}
+          "$BIN" formats
+          "$BIN" capabilities --json

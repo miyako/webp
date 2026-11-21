@@ -129,8 +129,9 @@ and re-pointed at `4d/` paths and the webp lock — covers the rest:
   component version (a signed build re-runs the compiled-host test on the
   signed ZIP). Evidence: `dist/webp.acceptance.json`, uploaded as an
   artifact.
-- `.github/workflows/4d-build.yml` — manually dispatched (main only)
-  Build: preflight (immutable commit, `ci_config.py validate --release`,
+- `.github/workflows/4d-build.yml` — hands-off Build (manual main dispatch,
+  or auto-run by an exact `Bump version to major.minor.patch` commit push
+  to main): preflight (immutable commit, `ci_config.py validate --release`,
   tag availability, secret-free signing policy), hosted acceptance via
   `4d.yml`, then `release_assets.py --create-tag --publish` which
   fail-closed-verifies every asset against the accepted evidence and
@@ -178,7 +179,9 @@ manual because the asset lock is a reviewed, committed pin.
    assets (`webp-convert-1.0.0-*.zip` + manifests) that `asset-lock.json`
    already pins. (User action; `gh` is not required — release by tag upload.)
 2. Verify `4d/cli/asset-lock.json` hashes against the uploaded assets.
-3. Run the **build** workflow (Actions → build → Run workflow, `main`).
+3. Start the **build** workflow: push an exact
+   `Bump version to 20.0.0` commit to main (auto-runs, hands-off), or
+   dispatch Actions → build → Run workflow on `main` (retry path).
    It accepts, (optionally signs + notarizes), creates tag `20.0.0`
    and publishes the release with `webp.zip`.
 4. Optional/accepted-gap: macOS signing is available via the workflow

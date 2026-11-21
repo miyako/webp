@@ -1,6 +1,9 @@
 # Build & publish the 4D component (prefix-free tag, e.g. 20.0.0).
 #
-# quickdraw-parity port. Manually dispatched on main; preflight traps the
+# quickdraw-parity port. Hands-off: runs on a manual main dispatch OR
+# automatically on the push of an exact "Bump version to major.minor.patch"
+# release commit to main (any other main push skips the whole build).
+# Preflight traps the
 # exact commit, validates configuration/signing policy, runs hosted
 # acceptance (unsigned or Apple-signed per 4d/release-policy.json + the
 # require flag), and only then creates the tag and publishes the release
@@ -13,6 +16,8 @@ name: build
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
 
 concurrency:
   group: 4d-build-publish
@@ -23,6 +28,9 @@ permissions:
 
 jobs:
   preflight:
+    # Hands-off: only a workflow_dispatch or an exact release bump commit
+    # push starts the build; any other push to main skips every job.
+    if: "github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Bump version to '))"
     # Traps the immutable source commit and the future release tag before
     # anything is built or signed.
     runs-on: ubuntu-latest
@@ -42,16 +50,34 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Require FOURD_ENABLED and main dispatch
+      - name: Require FOURD_ENABLED and publication from main
         run: |
           if [ "$FOURD_ENABLED" != "true" ]; then
             echo "Build requires the FOURD_ENABLED repo variable to be true" >&2
             exit 1
           fi
-          if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "$GITHUB_REF" != "refs/heads/main" ]; then
-            echo "Build must be manually dispatched on main" >&2
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ]; then
+              echo "Build auto-run requires main" >&2
+              exit 1
+            fi
+          elif [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ]; then
+            echo "Build accepts a main dispatch or a main release-bump push only" >&2
             exit 1
           fi
+
+      - name: Auto-publication gate — only an exact release version bump commit may publish
+        if: github.event_name == 'push'
+        env:
+          HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+          pattern = r"Bump version to (?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
+          message = os.environ.get("HEAD_MESSAGE") or ""
+          if not re.fullmatch(pattern, message):
+              sys.exit("Build auto-publication requires an exact 'Bump version to major.minor.patch' commit")
+          PY
 
       - id: pre
         name: Pin the release tag and source sha

@@ -32,10 +32,17 @@ MIT license.
 
 ## Hard pins required at first release (plan §11.5)
 
-- Rust toolchain (`rust-toolchain.toml`, to be added in Phase 2)
+- Rust toolchain — pinned in `rust-toolchain.toml` (1.100.0, committed)
 - `Cargo.lock` committed
-- libwebp version (from libwebp-sys2 vendored source)
+- libwebp version (from libwebp-sys2 vendored source; currently **1.5.0**)
 - Per-target build flags, recorded in the release manifest
+
+As of Phase 3 the redistribution duty above is wired up: `licenses/libwebp/`
+holds the vendored COPYING/AUTHORS/PATENTS (refresh with
+`scripts/refresh-licenses.sh`), and `scripts/release-manifest.sh` emits the
+§11.5 manifest (version, commit, target, date, SHA-256, dependency and
+license inventories, capability report, provenance) into `manifests/`
+(gitignored; generated per release).
 
 ## Known cleanup
 

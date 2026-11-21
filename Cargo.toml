@@ -1,0 +1,45 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/codec-webp",
+    "crates/codec-png",
+    "crates/codec-jpeg",
+    "crates/codec-gif",
+    "crates/codec-tiff",
+    "crates/codec-bmp",
+    "crates/cli",
+]
+exclude = ["tooling/codec-prototype"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[workspace.dependencies]
+webp-convert-core = { path = "crates/core" }
+webp-convert-codec-webp = { path = "crates/codec-webp" }
+webp-convert-codec-png = { path = "crates/codec-png" }
+webp-convert-codec-jpeg = { path = "crates/codec-jpeg" }
+webp-convert-codec-gif = { path = "crates/codec-gif" }
+webp-convert-codec-tiff = { path = "crates/codec-tiff" }
+webp-convert-codec-bmp = { path = "crates/codec-bmp" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "gif", "webp", "tiff", "bmp"] }
+kamadak-exif = "0.6"
+gif = "0.14"
+clap = { version = "4", features = ["derive"] }
+# static = always build vendored libwebp (never link a system/Homebrew/vcpkg libwebp,
+# which would break portability and reproducibility -- see ADR-002/ADR-015);
+# demux = animation + container chunk access
+libwebp-sys2 = { version = "0.2", features = ["static", "demux"] }
+# image = Frame::into_image / into_rgba_image (RGBA buffer conversion)
+webp-animation = { version = "0.10", features = ["image"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

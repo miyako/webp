@@ -79,10 +79,13 @@ jobs:
         run: cargo +1.100.0 test -p webp-convert --test matrix --test streams
           --test advanced --test metadata --release
 
-  4d-acceptance:
+  acceptance-4d:
     # Hosted 4D component acceptance; gated on a repository variable the
     # owner sets (vars.FOURD_ENABLED == 'true'). On forks or when unset the
     # job is skipped. See .github/workflows/4d.yml.
+    # Note: job IDs must start with a letter/underscore — '4d-acceptance'
+    # would invalidate the entire workflow file (zero jobs, silent parse
+    # failure, see rejected run 44876802506).
     needs: checks
     if: vars.FOURD_ENABLED == 'true'
     uses: ./.github/workflows/4d.yml

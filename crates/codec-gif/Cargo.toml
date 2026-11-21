@@ -1,0 +1,15 @@
+[package]
+name = "webp-convert-codec-gif"
+description = "GIF codec adapter (image + gif crates) for the WebP Converter CLI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+webp-convert-core.workspace = true
+image.workspace = true
+gif.workspace = true
+
+[lib]
+name = "codec_gif"

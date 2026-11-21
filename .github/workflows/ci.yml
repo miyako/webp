@@ -12,7 +12,7 @@ concurrency:
 jobs:
   checks:
     # fast lane: format, clippy, tests on the dev platform
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
       - name: Install pinned toolchain
@@ -33,8 +33,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-14 # arm64
-          - os: macos-13 # x64
+          - os: macos-15 # arm64; cross-builds x86_64 and lipos the Universal
           - os: windows-2022
             triple: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.os }}
@@ -44,21 +43,35 @@ jobs:
         shell: bash
         run: |
           rustup toolchain install 1.100.0
-          if [ -n "${{ matrix.triple }}" ]; then
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            rustup target add x86_64-apple-darwin
+          else
             rustup target add ${{ matrix.triple }}
           fi
-      - name: Build (release)
+      - name: Build native + Universal (macOS, ADR-015)
+        if: runner.os == 'macOS'
         shell: bash
         run: |
-          if [ -n "${{ matrix.triple }}" ]; then
-            cargo +1.100.0 build --release --target ${{ matrix.triple }}
-          else
-            cargo +1.100.0 build --release
-          fi
+          cargo +1.100.0 build --release
+          mv target/release/webp-convert target/release/webp-convert-arm64
+          cargo +1.100.0 build --release --target x86_64-apple-darwin
+          lipo -create -output target/release/webp-convert \
+            target/release/webp-convert-arm64 \
+            target/x86_64-apple-darwin/release/webp-convert
+          lipo -info target/release/webp-convert
+          otool -L target/release/webp-convert
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: cargo +1.100.0 build --release --target x86_64-pc-windows-msvc
       - name: Smoke test (linked formats + a real conversion)
         shell: bash
         run: |
-          BIN=target/release/webp-convert${{ runner.os == 'Windows' && '.exe' || '' }}
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            BIN=target/x86_64-pc-windows-msvc/release/webp-convert.exe
+          else
+            BIN=target/release/webp-convert
+          fi
           "$BIN" formats
           "$BIN" capabilities --json
       - name: Conversion tests (run the real decoder/encoder suite natively)

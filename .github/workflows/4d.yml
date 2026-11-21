@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   acceptance:
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 60
     env:
       FOURD_ENABLED: ${{ vars.FOURD_ENABLED }}

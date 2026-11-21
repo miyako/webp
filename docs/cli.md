@@ -40,11 +40,15 @@ The engine refuses conversions that would drop information without an
 explicit instruction:
 
 - **Animated input** (animated WebP/GIF with >1 frame) to a still target is
-  refused (exit 3) unless `--frame N` picks one explicitly.
+  refused (exit 3) unless `--frame N` picks one or `--flatten` explicitly
+  flattens to the first frame (with an `animation_flattened` warning).
+  Animated *output* to WebP or GIF is supported when no selection flags are
+  given; still targets remain refused rather than dropping frames.
 - **Alpha into an alpha-less target** (JPEG, BMP) requires `--background
   #RRGGBB` (exit 2). With it, pixels are composited and an
   `alpha_flattened` diagnostic is emitted.
-- **Multi-page TIFF** is refused rather than silently writing page 0.
+- **Multi-page TIFF** requires `--page N` (refused otherwise — never
+  silently writing page 0). `--page` and `--frame` cannot be combined.
 - **Metadata** (v0): input ICC/EXIF/XMP/comments are detected (presence
   probe) and a `metadata_dropped` warning is emitted because no target
   codec writes metadata through yet. `--metadata none` strips explicitly
@@ -73,8 +77,8 @@ explicit instruction:
 | `--metadata all\|icc\|none` | metadata intent (v0: all/icc diagnose drops, none strips) |
 | `--orient auto\|none` | apply EXIF orientation to pixels vs keep as stored (default none, warned) |
 | `--frame N` | decode frame N (0-based) of an animated input |
-| `--page N` | page selection (multi-page TIFF refused in v0; reserved) |
-| `--flatten` | animation flattening (P1; refused in v0) |
+| `--page N` | decode page N of a multi-page input (0-based; TIFF) |
+| `--flatten` | flatten an animated input to its first frame (warned) |
 | `--max-pixels-mp MP` | pixel budget (default 100 Mp) |
 | `--max-input-bytes BYTES` | input size budget (default 512 MiB) |
 | `--max-frames N` | frame-count budget, checked from the container header *before* decode (default: unlimited; animated input is refused without `--frame` anyway) |
@@ -158,12 +162,11 @@ webp-convert photo.png - --to webp --json | jq .output.bytes  # to stdout, JSON 
 
 ## Known limitations in v0 (honest list)
 
-- No metadata write-through to any format (ICP/EXIF/XMP chunks are not
+- No metadata write-through to any format (ICC/EXIF/XMP chunks are not
   copied; presence is diagnosed). P1.
-- Animated *write* (animated WebP/GIF output) is P1; `--flatten` refused.
 - APNG input decodes to its first frame (documented, diagnosed in caps).
 - 16-bit PNG/TIFF normalize to 8-bit with a diagnostic.
-- TIFF multi-page decoding (per-page access) is not implemented; input is
-  refused rather than mis-decoded.
-- GIF output quantizes to a 256-color palette (inherent to the format).
-- `--page` is reserved and reports "not implemented".
+- CMYK TIFF pages convert with a naive 1-minus mapping (no ICC profile math).
+- Animated input to a still target requires explicit selection
+  (`--frame N` or `--flatten`); animation output is webp/gif only.
+- GIF animation timing quantizes to 1/100 s (inherent to the format).

@@ -1,0 +1,121 @@
+# Reusable 4D component acceptance on a hosted macOS ARM64 runner.
+#
+# Caller gates this job on vars.FOURD_ENABLED == 'true' (release callers
+# must also enforce it; ci_config.py --release fails closed on it).
+# tool4d is downloaded from a SHA-256-pinned official URL carried by the
+# repository vars TOOL4D_URL / TOOL4D_SHA256 (or the package.json pin).
+#
+# Apple signing follows 4d/release-policy.json (the component version
+# listed in apple_notarized_versions) and can only be upgraded by the
+# caller passing require-apple-signing; the seven Apple secrets are read
+# through secrets: inherit at the caller.
+name: 4d-acceptance
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: Exact commit to check out (defaults to the caller SHA)
+        required: false
+        type: string
+      release_call:
+        description: True when invoked by the Build (publish) workflow
+        required: false
+        type: boolean
+        default: false
+      require-apple-signing:
+        description: Require Apple signing in addition to the version policy
+        required: false
+        type: boolean
+        default: false
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Optional commit SHA to check out
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: macos-14
+    timeout-minutes: 60
+    env:
+      FOURD_ENABLED: ${{ vars.FOURD_ENABLED }}
+      TOOL4D_URL: ${{ vars.TOOL4D_URL }}
+      TOOL4D_SHA256: ${{ vars.TOOL4D_SHA256 }}
+      RELEASE_SHA: ${{ inputs.source_sha || github.sha }}
+      APPLE_DEVELOPER_ID_CERTIFICATE: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE }}
+      APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD }}
+      KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+      NOTARYTOOL_APPLE_ID: ${{ secrets.NOTARYTOOL_APPLE_ID }}
+      NOTARYTOOL_TEAM_ID: ${{ secrets.NOTARYTOOL_TEAM_ID }}
+      NOTARYTOOL_PASSWORD: ${{ secrets.NOTARYTOOL_PASSWORD }}
+      CODESIGN_APPLE_ID: ${{ secrets.CODESIGN_APPLE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha || github.sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Release preconditions
+        if: inputs.release_call == true
+        run: |
+          if [ "$FOURD_ENABLED" != "true" ]; then
+            echo "release builds require the FOURD_ENABLED repo variable to be true" >&2
+            exit 1
+          fi
+          python 4d/scripts/ci_config.py validate --release --tag "$(python3 -c 'import json;print(json.load(open("4d/package.json"))["version"])')"
+
+      - name: Configuration check
+        if: inputs.release_call != true
+        run: python 4d/scripts/ci_config.py validate
+
+      - name: Resolve release tag (component version, prefix-free)
+        run: 'echo "RELEASE_TAG=$(python3 -c ''import json;print(json.load(open("4d/package.json"))["version"])'')" >> "$GITHUB_ENV"'
+
+      - name: Download pinned tool4d
+        if: vars.FOURD_ENABLED == 'true'
+        run: python 4d/scripts/ci_config.py download-tool4d
+
+      - name: Hosted acceptance
+        if: vars.FOURD_ENABLED == 'true'
+        run: |
+          ARG=""
+          if [ "${{ inputs.require-apple-signing }}" = "true" ]; then
+            ARG="--require-apple-signing"
+          fi
+          python 4d/scripts/accept_hosted.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --tool4d 4d/.tools/tool4d.app/Contents/MacOS/tool4d $ARG
+          python 4d/scripts/sign_release.py policy
+
+      - name: Upload compiled component
+        if: vars.FOURD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ inputs.release_call == true && 'compiled-release' || 'compiled-component' }}
+          path: |
+            4d/dist/webp.zip
+            4d/dist/webp.acceptance.json
+            4d/dist/webp.dmg
+            4d/dist/webp-signing.json
+          if-no-files-found: error
+          retention-days: ${{ inputs.release_call == true && 30 || 7 }}
+
+      - name: Upload diagnostics
+        if: failure() && vars.FOURD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: diagnostics-${{ github.run_id }}
+          path: |
+            4d/build/*.json
+            4d/build/**/*.log
+          if-no-files-found: ignore
+          retention-days: 7

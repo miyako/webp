@@ -24,17 +24,23 @@ def input_digest(root):
                          and not (folder == "Resources" and p.relative_to(directory).as_posix() == "en.lproj/syntaxEN.json"))
     root = root.resolve()
     parent = root.parent
-    digest = hashlib.sha256()
-    for path in sorted(files):
+    # Checkout-independent content identity: label every input by its root-
+    # relative (or OUTSIDE/) key FIRST, then sort by label — sorting by
+    # absolute path would make the digest depend on the checkout directory.
+    labeled = []
+    for path in files:
         path = Path(path).resolve()
         if any(parent_.is_symlink() for parent_ in [path, *path.parents]):
             raise ValueError("component inputs must not be symlinks: " + str(path))
-        if path == parent or parent in path.parents:
-            rel = "OUTSIDE/" + path.relative_to(parent).as_posix()
-        elif root in path.parents:
+        if root in path.parents:
             rel = path.relative_to(root).as_posix()
+        elif path == parent or parent in path.parents:
+            rel = "OUTSIDE/" + path.relative_to(parent).as_posix()
         else:
             raise ValueError("component input is outside root: " + str(path))
+        labeled.append((rel, path))
+    digest = hashlib.sha256()
+    for rel, path in sorted(labeled):
         digest.update(rel.encode("utf-8") + b"\0")
         digest.update(path.read_bytes() + b"\0")
     return digest.hexdigest()

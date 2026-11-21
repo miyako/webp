@@ -34,14 +34,9 @@
 		}
 	},
 	"_CLI": {
-		"execute()": {
-			"Syntax": "**.execute**( *arguments* : Collection )->result : Object",
+		"resolve()": {
+			"Syntax": "**.resolve**()->result : Object",
 			"Params": [
-				[
-					"arguments",
-					"Collection",
-					"->"
-				],
 				[
 					"result",
 					"Object",
@@ -50,9 +45,14 @@
 			],
 			"Summary": ""
 		},
-		"resolve()": {
-			"Syntax": "**.resolve**()->result : Object",
+		"execute()": {
+			"Syntax": "**.execute**( *arguments* : Collection )->result : Object",
 			"Params": [
+				[
+					"arguments",
+					"Collection",
+					"->"
+				],
 				[
 					"result",
 					"Object",

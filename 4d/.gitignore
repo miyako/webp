@@ -20,3 +20,7 @@ component/webp/Resources/webp-assets.json
 tooling/compiler/Project/DerivedData/
 tooling/compiler/Project/Sources/catalog.4DCatalog
 userPreferences.*/
+
+# tool4d scratch (downloaded by 4d/scripts/ci_config.py)
+.tools/
+**/.tools/

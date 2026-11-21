@@ -215,3 +215,41 @@
   Universal binary passes the 14-check self-test. **Windows x64: NOT
   verified on this machine — requires a Windows CI runner before any
   release claim.**
+
+# ADR-016 — Hosted acceptance and Apple-signed component releases
+
+- **Status:** Accepted (pipeline implemented, ported from quickdraw; signing
+  exercised to the fail-closed certificate boundary locally — full Apple
+  path requires the GitHub secrets and will be proven on the first hosted
+  run)
+- **Decision:** Port the audited `miyako/quickdraw` hosted-CI + Apple-signing
+  pipeline to this repository, re-pointed at `4d/` paths and the webp asset
+  lock:
+  - `.github/workflows/4d.yml` — reusable hosted acceptance job (macOS ARM64
+    runner): SHA-256-pinned tool4d download (`ci_config.py download-tool4d`),
+    pinned CLI asset download + staging, source host test, tool4d compile,
+    packaging, compiled-host test on the final archive, then per-policy
+    Apple signing + notarization (`sign_release.py`), with a compiled-host
+    re-test on the signed ZIP. Evidence: `dist/webp.acceptance.json`.
+  - `.github/workflows/4d-build.yml` — manual dispatch on `main`: preflight
+    (immutable commit, `ci_config.py validate --release`, tag availability,
+    secret-free signing policy read), 4D acceptance, then
+    `release_assets.py --create-tag --publish` for the fail-closed
+    verified, prefix-free tag + `webp.zip` release.
+  - `.github/workflows/ci.yml` runs the unsigned acceptance per push/PR,
+    gated on repository variable `FOURD_ENABLED=true`.
+  - Signing is gated two ways and upgrade-only: the component version must
+    appear in `4d/release-policy.json` → `apple_notarized_versions`, or the
+    caller passes `--require-apple-signing`. Secrets
+    (`APPLE_DEVELOPER_ID_CERTIFICATE{,_PASSWORD}`, `KEYCHAIN_PASSWORD`,
+    `NOTARYTOOL_{APPLE_ID,TEAM_ID,PASSWORD}`, optional `CODESIGN_APPLE_ID`)
+    are installed by the user-run `4d/scripts/set-release-secrets.sh`
+    helper; agents never handle them.
+  - tool4d pin precedence: repository variables `TOOL4D_URL` +
+    `TOOL4D_SHA256` (primary), falling back to the official
+    `resources-download.4d.com` / `builds2.4d.com` download verified against
+    the package pin when a `tool.sha256` exists.
+- **Alternatives:** Local-only release (rejected: no Apple notarization or
+  hosted evidence possible from this machine); per-run ad-hoc scripts
+  (rejected: quickdraw's audited, fail-closed scripts are the reviewed
+  precedent).

@@ -1,0 +1,121 @@
+# Build & publish the 4D component (prefix-free tag, e.g. 20.0.0).
+#
+# quickdraw-parity port. Manually dispatched on main; preflight traps the
+# exact commit, validates configuration/signing policy, runs hosted
+# acceptance (unsigned or Apple-signed per 4d/release-policy.json + the
+# require flag), and only then creates the tag and publishes the release
+# with the verified dist/ assets (webp.zip native asset name).
+#
+# Requires repo variable FOURD_ENABLED=true and vars TOOL4D_URL/TOOL4D_SHA256.
+# Apple signing requires the seven secrets documented by
+# 4d/scripts/set-release-secrets.sh.
+name: build
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: 4d-build-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    # Traps the immutable source commit and the future release tag before
+    # anything is built or signed.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      source_sha: ${{ steps.pre.outputs.source_sha }}
+      release_tag: ${{ steps.pre.outputs.release_tag }}
+      apple_signing: ${{ steps.policy.outputs.apple_signing }}
+    env:
+      FOURD_ENABLED: ${{ vars.FOURD_ENABLED }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Require FOURD_ENABLED and main dispatch
+        run: |
+          if [ "$FOURD_ENABLED" != "true" ]; then
+            echo "Build requires the FOURD_ENABLED repo variable to be true" >&2
+            exit 1
+          fi
+          if [ "$GITHUB_EVENT_NAME" != "workflow_dispatch" ] || [ "$GITHUB_REF" != "refs/heads/main" ]; then
+            echo "Build must be manually dispatched on main" >&2
+            exit 1
+          fi
+
+      - id: pre
+        name: Pin the release tag and source sha
+        run: |
+          RELEASE_TAG=$(python3 -c 'import json;print(json.load(open("4d/package.json"))["version"])')
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Release configuration and availability
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python 4d/scripts/ci_config.py validate \
+            --release --tag "${{ steps.pre.outputs.release_tag }}"
+          python 4d/scripts/release_ref.py available \
+            --repository "$GITHUB_REPOSITORY" --tag "${{ steps.pre.outputs.release_tag }}"
+
+      - id: policy
+        name: Signing policy (secret-free)
+        run: python 4d/scripts/sign_release.py policy
+
+  acceptance:
+    needs: preflight
+    uses: ./.github/workflows/4d.yml
+    with:
+      source_sha: ${{ needs.preflight.outputs.source_sha }}
+      release_call: true
+      require-apple-signing: ${{ needs.preflight.outputs.apple_signing == 'true' }}
+    secrets: inherit
+
+  publish:
+    # Fail-closed asset verification, tag creation, release publication.
+    needs: [preflight, acceptance]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.source_sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.preflight.outputs.source_sha }}
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: compiled-release
+          path: 4d/dist
+
+      - name: Verify, tag and publish
+        run: |
+          ARG=""
+          if [ "${{ needs.preflight.outputs.apple_signing }}" = "true" ]; then
+            ARG="--require-apple-signing"
+          fi
+          python 4d/scripts/release_assets.py \
+            --repository "$GITHUB_REPOSITORY" \
+            --tag "$RELEASE_TAG" \
+            --sha "$RELEASE_SHA" \
+            $ARG --create-tag --publish

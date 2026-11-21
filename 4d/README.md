@@ -113,31 +113,72 @@ python3 4d/scripts/accept_local.py \
 All steps are order-safe and idempotent; `stage_cli.py` refuses to
 write a lock whose hashes it could not freshly verify.
 
-## Hosted acceptance (next phase)
+## Hosted acceptance (ADR-016)
 
 Local acceptance is `partial` by construction (ADR-012): native Intel 4D,
-Windows 4D, hosted CLI smoke per target and the published-download check
-run only in hosted CI (`not_run` above). The port is mechanical from the
-audited precedent: quickdraw's `scripts/accept_hosted.py`,
-`scripts/ci_config.py download-tool4d`, and the
-`vars.FOURD_ENABLED / vars.TOOL4D_URL / vars.TOOL4D_SHA256` gated steps in
-its `.github/workflows/ci.yml`/`build.yml`, re-pointed at `4d/` paths and
-the webp lock. Not started in this phase; local evidence must be treated
-as incomplete until that lands.
+Windows 4D and the published-download check run only outside it (`not_run`
+above). The hosted pipeline — ported from the audited quickdraw precedent
+and re-pointed at `4d/` paths and the webp lock — covers the rest:
+
+- `.github/workflows/4d.yml` — reusable hosted acceptance job
+  (macOS ARM64 runner): `ci_config.py download-tool4d` (SHA-256-pinned
+  official download into `4d/.tools/tool4d.app`), pinned CLI asset
+  download + staging, source host test, tool4d compile, packaging,
+  compiled-host test on the final archive, then per-policy Apple signing
+  + notarization (`sign_release.py`) when `release-policy.json` lists the
+  component version (a signed build re-runs the compiled-host test on the
+  signed ZIP). Evidence: `dist/webp.acceptance.json`, uploaded as an
+  artifact.
+- `.github/workflows/4d-build.yml` — manually dispatched (main only)
+  Build: preflight (immutable commit, `ci_config.py validate --release`,
+  tag availability, secret-free signing policy), hosted acceptance via
+  `4d.yml`, then `release_assets.py --create-tag --publish` which
+  fail-closed-verifies every asset against the accepted evidence and
+  creates the prefix-free tag (e.g. `20.0.0`) before
+  `gh release create` with `webp.zip` + acceptance evidence (+ `webp.dmg`
+  and `webp-signing.json` on signed builds).
+- `.github/workflows/ci.yml` runs the unsigned acceptance from `4d.yml`
+  on every push/PR, gated on the repository variable `FOURD_ENABLED=true`
+  (skipped on forks and when unset).
+
+Repository configuration required once:
+
+| Item | Kind | Purpose |
+|---|---|---|
+| `FOURD_ENABLED` | variable | `true` enables the 4D acceptance + release jobs |
+| `TOOL4D_URL` | variable | official pinned tool4d app-archive URL (`resources-download.4d.com` / `builds2.4d.com`) |
+| `TOOL4D_SHA256` | variable | SHA-256 of that exact archive |
+| `APPLE_DEVELOPER_ID_CERTIFICATE` | secret | base64 PKCS#12 Developer ID Application certificate |
+| `APPLE_DEVELOPER_ID_CERTIFICATE_PASSWORD` | secret | PKCS#12 passphrase |
+| `KEYCHAIN_PASSWORD` | secret | password for the ephemeral CI keychain (any strong random value) |
+| `NOTARYTOOL_APPLE_ID` | secret | Apple ID for notarytool |
+| `NOTARYTOOL_TEAM_ID` | secret | App Store Connect team ID |
+| `NOTARYTOOL_PASSWORD` | secret | app-specific password for notarytool |
+| `CODESIGN_APPLE_ID` | secret (optional) | pins the identity (name or SHA-1) |
+
+`4d/scripts/set-release-secrets.sh owner/repo` mirrors these from the
+local login Keychain into GitHub secrets (user-run helper; agents must
+not execute it). Signing is gated two ways: the version must appear in
+`4d/release-policy.json` → `apple_notarized_versions`, or the caller must
+pass `--require-apple-signing`, which can only upgrade, never downgrade
+publication policy.
 
 ## Release steps (component 20.0.0)
+
+The hosted Build workflow automates steps 3-4 below; 1-2 remain
+manual because the asset lock is a reviewed, committed pin.
 
 1. Push `main`, then push the CLI tag `v1.0.0` and publish the CLI release
    assets (`webp-convert-1.0.0-*.zip` + manifests) that `asset-lock.json`
    already pins. (User action; `gh` is not required — release by tag upload.)
 2. Verify `4d/cli/asset-lock.json` hashes against the uploaded assets.
-3. Tag `20.0.0` (no `v`) on the same commit whose file tree contains the
-   lock; attach `4d/dist/webp.zip` as the release asset named exactly
-   `webp.zip`.
-4. Optional/accepted-gap: the CLI binary inside `webp.zip` is not Developer
-   ID signed/notarized; `release-policy.json` records no notarized versions.
-   Gatekeeper will require right-click → Open, or a future signed rebuild
-   (ADR: signing decision pending).
+3. Run the **build** workflow (Actions → build → Run workflow, `main`).
+   It accepts, (optionally signs + notarizes), creates tag `20.0.0`
+   and publishes the release with `webp.zip`.
+4. Optional/accepted-gap: macOS signing is available via the workflow
+   secrets above; a version is signed only once listed in
+   `release-policy.json` → `apple_notarized_versions`. Unsigned builds
+   keep the Gatekeeper right-click → Open caveat.
 5. Windows is out of scope for 20.0.0: no Windows CLI release exists yet;
    the lock has no `windows` entry and the component hard-fails asset
    verification on Windows rather than running unverified code.

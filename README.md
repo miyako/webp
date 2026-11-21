@@ -26,6 +26,30 @@ Key behaviors (details in [docs/cli.md](docs/cli.md)):
 - **Atomic writes** — temp file + rename; `--overwrite` is required;
   writing over the input is always refused.
 
+## 4D component
+
+This repository also releases a compiled 4D component (namespace
+**WebP**, tags without `v`, e.g. `20.0.0`, asset `webp.zip`) that wraps
+the pinned CLI executable — the CLI ships preinstalled and is
+SHA-256-verified at every call.
+
+```4d
+var $converter : cs.WebP.Converter
+$converter:=cs.WebP.Converter.new("macOS-universal")  // or no argument on macOS
+$result:=$converter.convert(File("/DATA/photo.png"); File("/DATA/photo.webp"); New object("quality"; 82))
+If ($result.ok)
+  // $result.value.output.bytes, plus machine-readable $result.value.diagnostics
+Else
+  ALERT($result.failureKind+": "+$result.error.message)
+End if
+```
+
+Install via the 4D dependency manager (`miyako/webp`, release `20.0.0`)
+or unzip `webp.zip` into your project's `Components` folder. Full user
+guide — installation, API, examples, platforms, errors, troubleshooting:
+
+- [docs/component.md](docs/component.md) — using the 4D component
+
 ## Build
 
 ```sh
@@ -41,6 +65,8 @@ dependencies. Cross-target WebP decoding/encoding uses libwebp via
 
 - [docs/cli.md](docs/cli.md) — full CLI reference, diagnostics, limits,
   and the known-limitations list
+- [docs/component.md](docs/component.md) — 4D component user guide
+  (installation, API, platforms, errors, compatibility)
 - [docs/release-notes-v1.0.0.md](docs/release-notes-v1.0.0.md) — what's
   in the current release
 - [docs/adr/ADRs.md](docs/adr/ADRs.md) — design decisions

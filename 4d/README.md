@@ -87,22 +87,43 @@ Any other key is rejected with `invalid_argument` before the process starts.
 ## Local pipeline
 
 ```bash
-# 1. Build/refresh the CLI asset pack and asset-lock (from target/universal)
-python3 4d/scripts/build_cli_asset.py
+# 0. Prereq: build the CLI once for the pipeline (repo root):
+#    cargo build --release --target universal2-apple-darwin
+#    then create the gitignored local release bundle + manifests:
+python3 4d/scripts/stage_cli.py        # build/verify/stage -> cli/asset-lock.json,
+                                       # component Resources (bin + webp-assets.json)
 
-# 2. Run the tool4d host smoke (source component)
+# 1. tool4d host contract (source component):
 python3 4d/scripts/test_4d.py \
   --tool4d "/path/to/tool4d.app/Contents/MacOS/tool4d"
 
-# 3. Package the component (CLI preinstalled) -> 4d/dist/webp.zip
-python3 4d/scripts/package_component.py
+# 2. Compile with the real free tool4d compiler:
+python3 4d/scripts/compile_component.py \
+  --tool4d "/path/to/tool4d.app/Contents/MacOS/tool4d"
 
-# 4. Validate the produced ZIP (unzip safety + resource checks)
-python3 4d/scripts/package_component.py --verify-only
+# 3. Package the component (CLI preinstalled) -> 4d/dist/webp.zip
+python3 4d/scripts/package_component.py --tag 20.0.0
+
+# 4. One-shot acceptance (all of the above + compiled-host + stability,
+#    emits build/acceptance.json and dist/webp.acceptance.json):
+python3 4d/scripts/accept_local.py \
+  --root . --tool4d "/path/to/tool4d.app/Contents/MacOS/tool4d"
 ```
 
-All steps are order-safe and idempotent; `build_cli_asset.py` refuses to
+All steps are order-safe and idempotent; `stage_cli.py` refuses to
 write a lock whose hashes it could not freshly verify.
+
+## Hosted acceptance (next phase)
+
+Local acceptance is `partial` by construction (ADR-012): native Intel 4D,
+Windows 4D, hosted CLI smoke per target and the published-download check
+run only in hosted CI (`not_run` above). The port is mechanical from the
+audited precedent: quickdraw's `scripts/accept_hosted.py`,
+`scripts/ci_config.py download-tool4d`, and the
+`vars.FOURD_ENABLED / vars.TOOL4D_URL / vars.TOOL4D_SHA256` gated steps in
+its `.github/workflows/ci.yml`/`build.yml`, re-pointed at `4d/` paths and
+the webp lock. Not started in this phase; local evidence must be treated
+as incomplete until that lands.
 
 ## Release steps (component 20.0.0)
 

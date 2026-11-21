@@ -1,0 +1,5 @@
+target/
+tooling/codec-prototype/target/
+tooling/codec-prototype/out/
+*.DStore
+.DS_Store

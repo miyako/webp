@@ -7,51 +7,13 @@
 //! - malformed input: exit 3, never a successful conversion
 
 use std::path::{Path, PathBuf};
-use std::process::Command as StdCommand;
 
 use assert_cmd::prelude::*;
 use image::GenericImageView;
 use predicates::prelude::*;
 
-fn repo_root() -> PathBuf {
-    let mut dir = std::env::current_dir().unwrap();
-    loop {
-        if dir.join("tests/fixtures").is_dir() {
-            return dir;
-        }
-        assert!(dir.pop(), "repo root not found");
-    }
-}
-
-fn fixture(rel: &str) -> PathBuf {
-    repo_root().join("tests/fixtures").join(rel)
-}
-
-/// Prefer the release binary when WEBP_CONVERT_BIN is set (matrix tests are
-/// timing-sensitive); otherwise the standard test-built binary.
-fn cmd() -> StdCommand {
-    match std::env::var("WEBP_CONVERT_BIN") {
-        Ok(path) => StdCommand::new(resolve_bin(&path)),
-        Err(_) => StdCommand::cargo_bin("webp-convert").unwrap(),
-    }
-}
-
-/// A WEBP_CONVERT_BIN relative to the repo root (e.g. target/release/...)
-/// still works when cargo runs the test with cwd = crates/cli.
-fn resolve_bin(path: &str) -> PathBuf {
-    let p = PathBuf::from(path);
-    if p.is_file() {
-        return p;
-    }
-    // manifest dir is crates/cli; the workspace target dir lives two up
-    let from_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../")
-        .join(path);
-    if from_root.is_file() {
-        return from_root;
-    }
-    p
-}
+mod common;
+pub use common::{cmd, dir_entries, fixture, run_with_stdin, stderr_string, stdout_string};
 
 /// (source format, target format): the full 6x6 matrix.
 fn matrix_pairs() -> Vec<(String, String)> {

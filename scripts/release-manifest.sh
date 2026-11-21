@@ -47,6 +47,16 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
     DIRTY="-dirty"
 fi
 TARGET="$(rustc -vV | sed -n 's/^host: //p')"
+# A lipo'd universal macOS binary is not the host triple; record it as the
+# rust-analyzer-style universal2 target so its manifest doesn't collide with
+# the single-arch manifest of the same host.
+case "$(uname -s)" in
+    Darwin)
+        if lipo -info "$BIN" 2>/dev/null | grep -q "x86_64 arm64\|arm64 x86_64"; then
+            TARGET="universal2-apple-darwin"
+        fi
+        ;;
+esac
 RUSTC_VERSION="$(rustc -vV | sed -n 's/^rustc //p')"
 TOOLCHAIN_PIN="$(sed -n 's/^channel *= *"\(.*\)"/\1/p' rust-toolchain.toml | head -1)"
 BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)"

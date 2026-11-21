@@ -88,6 +88,7 @@ def fetch_pinned_cli_assets(root):
         if any(path.is_symlink() for path in [archive, *archive.parents]):
             raise PipelineError("asset cache path must not traverse symlinks: " + str(archive))
         staging = archive.with_name(archive.name + ".downloading")
+        staging.parent.mkdir(parents=True, exist_ok=True)
         try:
             with urllib.request.urlopen(entry["url"], timeout=120) as response, \
                     staging.open("wb") as output:

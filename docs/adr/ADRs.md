@@ -150,16 +150,27 @@
 
 # ADR-012 — Repository strategy
 
-- **Status:** Accepted
-- **Decision:** Two repositories. This repo (`webp`, GitHub `miyako/webp`)
-  is the CLI repo and the upstream release point (tags without `v` prefix
-  on the *component* only, per template convention — CLI tags are CLI's
-  own). The 4D component lives in its own repo and pins CLI assets in
-  `cli/asset-lock.json` (checksum + tag + source commit), following the
-  audited `miyako/quickdraw` and `4d-component-template` conventions.
-- **Alternatives:** Monorepo (rejected for now: independent release
-  cadence and clean provenance were the observed working conventions in
-  quickdraw; master plan §3.2).
+- **Status:** Amended 2026-11-21 (single repository, two release tracks)
+- **Decision (amended):** One repository. This repo (`webp`, GitHub
+  `miyako/webp`) hosts both the CLI and the 4D component. Two release
+  tracks, independent version ladders:
+  - **CLI releases** — CLI's own convention: `v`-prefixed SemVer tags
+    (`v0.1.0-rc.1`, `v1.0.0`), assets named `webp-convert-<version>-<target>.zip`.
+  - **4D component releases** — Dependency-manager contract: prefix-free
+    SemVer tags **without** `v` (first: `20.0.0`), asset exactly
+    `webp.zip` (repository basename), one released component per tag.
+    Component versions are entirely separate from CLI versions.
+  The component pins CLI release assets in `4d/cli/asset-lock.json`
+  (URL + tag + source commit + SHA-256 of ZIP/manifest/binary), following
+  the audited `miyako/quickdraw` and `4d-component-template` conventions;
+  the component ships the CLI **preinstalled** under
+  `Resources/bin/{macOS,Windows}/`.
+- **Was:** Two repositories (reverted 2026-11-21: the Dependency-manager
+  asset name must equal the repository basename, and a second repo named
+  `webp` is not available while the CLI repo holds that name; user
+  decision).
+- **Alternatives:** Separate component repository (would require renaming
+  the CLI repo to `webp-convert` first — rejected for now).
 
 # ADR-013 — 4D executable packaging and asset pinning
 
